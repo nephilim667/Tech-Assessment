@@ -153,5 +153,161 @@ namespace WebApi.UnitTests.Domain.Users
             Assert.False(result.IsSuccess);
             Assert.Equal("user.invalid_city", result.Error.Code);
         }
+
+        [Fact]
+        public void Create_When_Data_Is_Valid_Creates_Active_User()
+        {
+            var result = User.Create(
+                firstName: "Juste",
+                lastName: "Leblanc",
+                street: "10 rue des Lilas",
+                postalCode: "75001",
+                city: "Paris",
+                maxExpensesPerMonth: 1);
+
+            Assert.True(result.IsSuccess);
+            Assert.True(result.Value.IsActive);
+            Assert.False(result.Value.IsDeleted);
+        }
+
+        [Fact]
+        public void Deactivate_When_User_Is_Active_Makes_User_Inactive()
+        {
+            // Arrange
+            var user = User.Create(
+                firstName: "Juste",
+                lastName: "Leblanc",
+                street: "10 rue des Lilas",
+                postalCode: "75001",
+                city: "Paris",
+                maxExpensesPerMonth: 1).Value;
+
+            // Act
+            var result = user.Deactivate();
+
+            // Assert
+            Assert.True(result.IsSuccess);
+            Assert.False(user.IsActive);
+            Assert.False(user.IsDeleted);
+        }
+
+        [Fact]
+        public void Activate_When_User_Is_Inactive_Makes_User_Active()
+        {
+            // Arrange
+            var user = User.Create(
+                firstName: "Juste",
+                lastName: "Leblanc",
+                street: "10 rue des Lilas",
+                postalCode: "75001",
+                city: "Paris",
+                maxExpensesPerMonth: 1).Value;
+
+            user.Deactivate();
+
+            // Act
+            var result = user.Activate();
+
+            // Assert
+            Assert.True(result.IsSuccess);
+            Assert.True(user.IsActive);
+            Assert.False(user.IsDeleted);
+        }
+
+        [Fact]
+        public void Delete_When_User_Is_Active_Marks_User_As_Deleted_And_Inactive()
+        {
+            // Arrange
+            var user = User.Create(
+                firstName: "Juste",
+                lastName: "Leblanc",
+                street: "10 rue des Lilas",
+                postalCode: "75001",
+                city: "Paris",
+                maxExpensesPerMonth: 1).Value;
+
+            var initialId = user.Id;
+
+            // Act
+            var result = user.Delete();
+
+            // Assert
+            Assert.True(result.IsSuccess);
+            Assert.True(user.IsDeleted);
+            Assert.False(user.IsActive);
+            Assert.Equal(initialId, user.Id);
+        }
+
+        [Fact]
+        public void Activate_When_User_Is_Deleted_Returns_Failure()
+        {
+            // Arrange
+            var user = User.Create(
+                firstName: "Juste",
+                lastName: "Leblanc",
+                street: "10 rue des Lilas",
+                postalCode: "75001",
+                city: "Paris",
+                maxExpensesPerMonth: 1).Value;
+
+            user.Delete();
+
+            // Act
+            var result = user.Activate();
+
+            // Assert
+            Assert.False(result.IsSuccess);
+            Assert.Equal("user.deleted", result.Error.Code);
+            Assert.True(user.IsDeleted);
+            Assert.False(user.IsActive);
+        }
+
+        [Fact]
+        public void Deactivate_When_User_Is_Deleted_Returns_Failure()
+        {
+            // Arrange
+            var user = User.Create(
+                firstName: "Juste",
+                lastName: "Leblanc",
+                street: "10 rue des Lilas",
+                postalCode: "75001",
+                city: "Paris",
+                maxExpensesPerMonth: 1).Value;
+
+            user.Delete();
+
+            // Act
+            var result = user.Deactivate();
+
+            // Assert
+            Assert.False(result.IsSuccess);
+            Assert.Equal("user.deleted", result.Error.Code);
+            Assert.True(user.IsDeleted);
+            Assert.False(user.IsActive);
+        }
+
+        [Fact]
+        public void Delete_When_User_Is_Already_Deleted_Returns_Failure()
+        {
+            // Arrange
+            var user = User.Create(
+                firstName: "Juste",
+                lastName: "Leblanc",
+                street: "10 rue des Lilas",
+                postalCode: "75001",
+                city: "Paris",
+                maxExpensesPerMonth: 1).Value;
+
+            user.Delete();
+
+            // Act
+            var result = user.Delete();
+
+            // Assert
+            Assert.False(result.IsSuccess);
+            Assert.Equal("user.deleted", result.Error.Code);
+            Assert.True(user.IsDeleted);
+            Assert.False(user.IsActive);
+        }
     }
 }
