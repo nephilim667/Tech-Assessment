@@ -1,9 +1,12 @@
 <Solution>
   <Folder Name="/src/">
-    <Project Path="src\AppHost\AppHost.csproj" Type="Classic C#" />
-    <Project Path="src\WebApi\WebApi.csproj" Type="Classic C#" />
+    <Project Path="src\AppHost\AppHost.csproj" Type="C#" />
+    <Project Path="src\WebApi\WebApi.csproj" Type="C#" />
   </Folder>
   <Folder Name="/test/">
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/WebApi.UnitTests/WebApi.UnitTests.csproj" />
   </Folder>
   <Folder Name="/_/">
     <File Path="global.json" />
