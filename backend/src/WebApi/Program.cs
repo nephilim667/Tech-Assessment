@@ -6,13 +6,18 @@ using WebApi.Infrastructure.Persistence;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.AddRedisClient(connectionName: "cache");
+
 builder.AddNpgsqlDbContext<AppDbContext>(connectionName: "database",
     configureDbContextOptions: options =>
         options.UseAsyncSeeding(async (context, _, cancellationToken) =>
             await AppDbContext.SeedAsync(context, cancellationToken)));
+
 builder.Services
     .AddOpenApi()
-    .AddPersistence();
+    .AddPersistence()
+    .AddApplication()
+    .AddValidation();
+
 builder.Services.AddHealthChecks();
 
 var app = builder.Build();
@@ -39,7 +44,7 @@ app.UseHttpsRedirection();
 app.MapUserEndpoints();
 app.MapHealthChecks("/health");
 
-app.Run();
+await app.RunAsync();
 
 [SuppressMessage("ReSharper", "ClassNeverInstantiated.Global")]
 public partial class Program;
