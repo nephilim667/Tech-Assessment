@@ -11,8 +11,23 @@ namespace WebApi.Infrastructure.Persistence.Entities
 
         [Required]
         public required string FirstName { get; set; }
-        
+
         [Required]
         public required string LastName { get; set; }
+
+        [Required]
+        public required string Street { get; set; }
+
+        [Required]
+        public required string PostalCode { get; set; }
+
+        [Required]
+        public required string City { get; set; }
+
+        public int MaxExpensesPerMonth { get; set; }
+
+        public bool IsActive { get; set; }
+
+        public bool IsDeleted { get; set; }
     }
 }
