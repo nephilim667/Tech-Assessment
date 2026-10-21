@@ -93,7 +93,7 @@ La page de visualisation d'une note de frais permet :
 
 ### Démarche
 
-Le travail est organisé en trois étapes : analyse fonctionnelle, analyse technique, puis réalisation. Cette section présente le cadrage fonctionnel préalable à l’implémentation ; elle ne constitue pas un bilan des fonctionnalités déjà réalisées.
+Le travail est organisé en trois étapes : analyse fonctionnelle, analyse technique, puis réalisation. Cette section présente les cadrages fonctionnel et technique préalables à l’implémentation ; elle ne constitue pas un bilan des fonctionnalités déjà réalisées.
 
 ### Questions initiales
 
@@ -118,20 +118,20 @@ Le travail est organisé en trois étapes : analyse fonctionnelle, analyse techn
 
 ### Décisions fonctionnelles retenues
 
-Les décisions ci-dessous complètent les exigences explicites du sujet. L’unicité d’une note par utilisateur et par mois, l’absence de modification des coordonnées et du quota, ainsi que le gel de l’historique des utilisateurs supprimés sont des choix de cadrage. L’authentification des administrateurs est un ajout au périmètre initial.
+Les décisions ci-dessous complètent les exigences explicites du sujet. L’autorisation de plusieurs notes par utilisateur et par mois précise notre lecture du sujet. L’absence de modification des coordonnées et du quota, les restrictions liées à l’inactivité et le gel de l’historique des utilisateurs supprimés sont des choix de cadrage. L’authentification, le rôle de superadministrateur et la création de comptes administrateurs sont des ajouts au périmètre initial.
 
 | Sujet | Décision retenue |
 |---|---|
 | Utilisateurs | Nom, prénom, adresse et quota renseignés à la création, non modifiables. Rue, code postal et ville obligatoires pour l’adresse. Activation/désactivation et suppression logique disponibles. |
 | Configuration du quota | Quota individuel entier supérieur ou égal à 1, renseigné à la création et identique pour toutes les périodes. Zéro est exclu : le quota représente un droit à enregistrer au moins une dépense par mois. |
-| Notes de frais | Une seule note par utilisateur, mois et année. Intitulé au format « Utilisateur - Mois Année », figé à la création et non éditable. |
+| Notes de frais | Plusieurs notes sont autorisées pour un même utilisateur, mois et année. Intitulé au format « Utilisateur - Mois Année », figé à la création et non éditable. Une référence stable et unique, distincte de l’intitulé, est affichée à côté pour différencier les notes dans les listes et les sélections. Le mécanisme d’attribution de cette référence sera précisé avant son implémentation. |
 | Dépenses | Description obligatoire, non composée uniquement d’espaces, de 50 caractères maximum. Montant en euros strictement positif, avec deux décimales maximum. Adresse de facturation avec rue, code postal et ville obligatoires ; enseigne facultative. |
 | Période | La date complète de la dépense détermine son mois et son année de rattachement et doit correspondre à la période de sa note. Saisies rétroactives et dates futures autorisées, aucune clôture ni restriction temporelle n’étant demandée. |
 | Affichage des dates | Présentation en français selon le format demandé, par exemple « mercredi 15 octobre 2025 ». |
 | Calcul du quota | Nombre de dépenses non supprimées de l’utilisateur pour le mois et l’année concernés, toutes ses notes confondues. Contrôle à la création et lors d’un transfert entrant ; une correction sans changement de période ne consomme aucune place supplémentaire. |
 | Quota atteint | Refus de la création ou du transfert entrant avec un message d’erreur explicite. Les modifications sans augmentation du compteur et les suppressions restent possibles, sous réserve des autres règles. |
-| Changement de mois | Transfert vers la note existante du même utilisateur pour la période cible, sous contrôle du quota de destination. Sans note de destination, transfert refusé : l’administrateur doit la créer préalablement si l’utilisateur est actif. Le changement de date et de rattachement réussit entièrement ou ne change rien. |
-| Utilisateur inactif | Aucune nouvelle note ne peut lui être affectée. Les opérations sur ses notes existantes restent autorisées sous réserve des autres règles. Un transfert vers une note existante reste possible ; si elle n’existe pas, sa création est interdite. |
+| Changement de mois | Transfert vers une note existante du même utilisateur pour la période cible, choisie explicitement par l’administrateur, sous contrôle du quota partagé de destination. Sans note de destination, transfert refusé : l’administrateur doit la créer préalablement si l’utilisateur est actif. Le changement de date et de rattachement réussit entièrement ou ne change rien. |
+| Utilisateur inactif | Création de notes, ajout de dépenses et transferts entre notes interdits. Consultation, correction des dépenses dans leur note et période existantes, suppression de dépenses et suppression de notes restent autorisées sous réserve des autres règles. |
 | Utilisateur supprimé | Utilisateur, notes et dépenses masqués des listes opérationnelles. Historique conservé en base et figé : toute création, modification ou suppression sur cet historique est interdite. Cette règle doit être appliquée côté serveur. |
 | Suppression d’une dépense | Suppression logique ; la dépense ne consomme plus le quota du mois concerné. Aucun parcours de restauration n’est prévu. |
 | Suppression d’une note | Suppression physique en cascade de toutes ses dépenses, y compris celles déjà supprimées logiquement. Les dépenses correspondantes ne consomment plus le quota. Opération interdite si l’utilisateur est supprimé. |
@@ -140,13 +140,149 @@ Les décisions ci-dessous complètent les exigences explicites du sujet. L’uni
 
 ### Exceptions retenues
 
+- L’inactivité interdit également l’ajout de dépenses et les transferts entre notes, au-delà de la seule interdiction explicite d’affecter une nouvelle note. Les corrections restent possibles dans la note et la période existantes.
+
 - Le gel de l’historique d’un utilisateur supprimé limite l’édition des dépenses « en tout temps » et la suppression physique de ses notes.
 - La suppression physique d’une note entraîne celle de ses dépenses, malgré leur suppression individuelle normalement logique. Les données ainsi supprimées ne seront donc pas disponibles dans de futures archives.
 - La conservation des données d’un utilisateur supprimé préserve son historique, mais ne constitue pas un journal d’audit complet des modifications.
 
-### Hypothèse examinée puis écartée
+### Hypothèses examinées puis écartées
+
+L’unicité d’une note par utilisateur et par mois a été envisagée puis abandonnée : plusieurs notes sont autorisées et le quota est partagé entre elles. Un quota de dix dépenses peut ainsi être réparti en quatre, trois et trois dépenses sur trois notes. Les intitulés restent conformes au format imposé ; une référence séparée les distingue à l’affichage.
 
 Une restriction des créations au mois courant a été envisagée pour représenter une clôture comptable. Elle n’a pas été retenue : elle n’est pas demandée dans le cahier des charges et serait contournable par une modification de date vers un mois passé. La gestion d’une véritable clôture est proposée comme amélioration.
+
+### Choix techniques retenus
+
+Les choix suivants constituent le cadre de réalisation. Leur implémentation et leur validation seront renseignées dans le bilan final.
+
+#### Architecture et responsabilités
+
+- **Monolithe modulaire** : conservation du projet WebApi fourni et organisation en dossiers, avec un découpage par fonctionnalité. Aucun framework CQRS ni infrastructure distribuée supplémentaire n’est introduit.
+- **Domain** : modèles et comportements métier, indépendants des contrats HTTP et des entités EF.
+- **Application** : services par fonctionnalité (`UserService`, `ExpenseReportService`, `ExpenseService`), orchestration des cas d’usage et interfaces des services et repositories nécessaires.
+- **Infrastructure** : persistance EF Core, configurations, migrations, mappings et implémentations des repositories, transactions et accès Redis.
+- **API** : Minimal APIs conservées, contrats de requête/réponse, authentification, autorisation et traduction des résultats applicatifs en réponses HTTP.
+- Les dépendances sont contrôlées par convention et revue : le découpage en dossiers dans un même projet ne garantit pas leur respect à la compilation.
+
+#### Trois modèles distincts
+
+| Modèle | Responsabilité |
+|---|---|
+| Domaine | Exprimer les comportements et préserver les invariants métier. |
+| Persistance | Représenter l’état stocké, les relations et les champs techniques d’audit. |
+| Contrats API | Définir les données acceptées et retournées pour chaque opération, sans exposer les entités EF ou les objets métier directement. |
+
+Des mappings explicites isolent les évolutions du métier, du stockage et des contrats HTTP. Le coût de mapping et de maintenance est accepté en contrepartie de cette séparation. L’approche métier s’inspire du DDD ; la réalisation sera guidée par les tests (TDD).
+
+`Expense` porte sa date, sa description, son montant et son adresse de facturation. Elle protège ses règles propres ; le service applicatif coordonne les vérifications concernant l’utilisateur, la note, la période et le quota. Les relations de persistance ne définissent pas à elles seules les frontières des agrégats.
+
+Les adresses utilisent des champs simples. Le quota utilisateur est nommé `MaxExpensesPerMonth` afin d’expliciter qu’il s’agit d’un nombre de dépenses, non d’un plafond monétaire. Les dates techniques de création et de dernière modification appartiennent au modèle de persistance et ne sont pas exposées sans nécessité.
+
+#### Persistance et accès aux données
+
+- Conservation d’**EF Core avec Npgsql**, déjà présents dans le socle, en **Code First**. Les migrations sont relues et versionnées avec le code ; elles accompagnent l’évolution du schéma.
+- Repositories spécialisés, sans repository générique et sans exposition d’`IQueryable` ou des entités EF hors de l’infrastructure.
+- Clé étrangère obligatoire de `Expense` vers `ExpenseReport`, et de `ExpenseReport` vers `User`.
+- Index non unique sur `(UserId, Year, Month)` pour rechercher les notes et calculer le quota mensuel partagé. Aucune contrainte d’unicité sur ce triplet : plusieurs notes du même utilisateur peuvent coexister pour une période. La référence d’affichage est distincte de l’intitulé et identifie une note sans ambiguïté.
+- Suppression physique en cascade des dépenses lorsque leur note est supprimée. La suppression logique d’un utilisateur conserve ses relations.
+- Nullabilité, champs obligatoires et longueurs configurés sur les modèles persistés ; ces contraintes ne remplacent pas la validation des entrées et des règles métier.
+- Pas de lazy loading. Chargements explicites, eager loading lorsque les objets liés sont nécessaires, projections et agrégations LINQ pour les lectures ciblées.
+- Comptage des dépenses et somme des montants effectués en base sans charger toute la collection. Aucun compteur ni total dérivé n’est persisté dans `ExpenseReport`.
+- Le total monétaire de la note est retourné par l’API et couvre toutes ses dépenses non supprimées, indépendamment de la page affichée.
+
+#### Transactions et concurrence
+
+Le service applicatif délimite l’opération transactionnelle via une abstraction implémentée dans l’infrastructure. Les repositories partagent le même `DbContext` et ne sauvegardent pas indépendamment les étapes d’un cas d’usage.
+
+Un **verrou explicite sur la ligne de l’utilisateur bénéficiaire**, acquis dans une transaction courte avant les lectures de validation, coordonne toutes les mutations de ses notes et dépenses. Le contrôle de son état, le comptage du quota et l’écriture se déroulent dans cette même transaction. Le verrou est conservé jusqu’au commit ou au rollback.
+
+Tous les chemins de mutation doivent respecter ce protocole, y compris l’activation/désactivation et la suppression logique de l’utilisateur. Un changement de date et de note est atomique : aucune modification partielle en cas de refus ou d’échec.
+
+Ce choix sérialise les écritures concernant un même utilisateur, y compris sur des mois différents ; les utilisateurs distincts restent indépendants. Ce compromis privilégie une garantie explicite et simple dans le périmètre du test. Les erreurs d’attente ou de concurrence doivent être traitées sans exposer de détails techniques au client.
+
+#### Validation et contrats HTTP
+
+- **FluentValidation** pour les entrées : champs obligatoires, longueurs, montant strictement positif avec deux décimales maximum, quota entier supérieur ou égal à 1. Validation asynchrone explicite dans le parcours des Minimal APIs.
+- Le domaine et les services applicatifs garantissent les règles métier : état de l’utilisateur, cohérence de période, quota et conditions de transfert. Les contraintes de base et les transactions complètent ces contrôles.
+- Génération du document **OpenAPI** par ASP.NET Core et interface de consultation/test **Scalar**. Le choix de Scalar ne suppose pas l’abandon de Swagger ou de Swashbuckle.
+- Groupes de routes par ressource : `/api/users`, `/api/expense-reports`, `/api/expenses`, `/api/auth` et `/api/admin-accounts`.
+- Création par `POST` avec réponse `201 Created`, identifiant et adresse de la ressource ; modification complète des champs éditables d’une dépense par `PUT` ; changement d’état utilisateur par `PUT /api/users/{id}/status` ; suppression par `DELETE` avec réponse `204 No Content`.
+- Refus métier attendus représentés par des résultats explicites ; traitement centralisé des exceptions inattendues.
+- Erreurs au format `ProblemDetails` ou `ValidationProblemDetails`, avec code applicatif stable et erreurs par champ lorsque pertinent. Le frontend ne déduit pas le type d’erreur à partir du texte du message.
+
+| Situation | Statut HTTP |
+|---|---|
+| Entrée invalide | `400 Bad Request` |
+| Authentification absente, expirée ou révoquée | `401 Unauthorized` |
+| Droits insuffisants | `403 Forbidden` |
+| Ressource inexistante ou masquée après suppression | `404 Not Found` |
+| Quota atteint ou conflit avec l’état courant | `409 Conflict` |
+| Erreur inattendue | `500 Internal Server Error`, sans détail technique exposé |
+
+La pagination utilise `PagedResult<T>` avec `Items`, `PageNumber`, `PageSize` et `TotalCount`. Les pages commencent à 1 ; la taille est imposée à 5 côté serveur dans cette version, tout en étant retournée dans le contrat pour permettre une évolution ultérieure. Un numéro inférieur à 1 retourne `400` avec une erreur de validation, sans résultat paginé. Une page valide au-delà des résultats retourne `200` avec une liste vide et les métadonnées. Le montant total appartient à la réponse spécialisée de détail de note, pas au wrapper générique.
+
+#### Authentification et autorisation
+
+- **ASP.NET Core Identity** pour les comptes, mots de passe et rôles ; comptes de connexion distincts des employés bénéficiaires métier.
+- Un **superadministrateur** est provisionné après migration par un traitement idempotent. Ses identifiants initiaux sont fournis par configuration secrète, sans mot de passe versionné.
+- Le superadministrateur peut créer des comptes administrateurs et gérer les employés bénéficiaires, notes et dépenses. Les administrateurs gèrent les employés, notes et dépenses, mais ne créent pas de comptes administrateurs. Aucun parcours d’inscription publique n’est prévu.
+- Authentification par **JWT Bearer**, avec émission des JWT dans l’application ; pas d’utilisation des jetons propriétaires d’Identity.
+- Durée de vie de l’access token : **une heure**. Validation de la signature, de l’émetteur, de l’audience et de l’expiration. Claims limités aux besoins de l’API : identité, rôle, identifiant unique du jeton (`jti`) et métadonnées de validité.
+- Clé de signature fournie par configuration secrète. Un JWT signé n’est pas chiffré : aucune donnée sensible inutile n’y est ajoutée.
+- JWT conservé dans **`sessionStorage`** côté Angular, puis ajouté au header `Authorization` uniquement pour les appels à notre API.
+- Aucun refresh token dans ce périmètre ; reconnexion nécessaire après expiration.
+- Déconnexion effective du token courant : inscription de son `jti` dans une liste de révocation **Redis** jusqu’à la fin de sa fenêtre de validité acceptée par l’API. Vérification à chaque requête authentifiée ; token révoqué refusé.
+
+#### Sécurité : portée et limites
+
+La configuration doit rester proportionnée au test, sans présenter les protections des frameworks comme une garantie automatique contre toutes les attaques.
+
+- Autorisations vérifiées côté serveur ; les guards Angular assurent seulement la cohérence de navigation.
+- CORS limité aux origines nécessaires lorsque le navigateur appelle l’API depuis une autre origine. CORS n’est ni une authentification ni une protection générale contre les appels externes.
+- Utilisation des protections de rendu et de sanitisation Angular ; pas de contournement de sécurité ou d’injection directe de HTML non maîtrisé.
+- Le JWT n’étant pas envoyé automatiquement comme un cookie, l’authentification Bearer par header réduit le scénario classique de CSRF lié aux cookies. Tout ajout ultérieur d’authentification par cookie imposera de réexaminer cette protection.
+- **Limite acceptée** : `sessionStorage` est accessible au JavaScript de l’origine ; une XSS pourrait voler le token. Redis permet de le révoquer, mais n’empêche ni son vol ni son utilisation avant révocation.
+- La conservation des révocations Redis jusqu’à expiration doit être assurée. Si la vérification est indisponible, l’accès protégé doit être refusé ; la déconnexion ne doit pas être annoncée comme réussie si la révocation n’a pas été enregistrée.
+- La révocation concerne le token courant, pas toutes les sessions du compte. Le durcissement complémentaire, notamment une politique CSP adaptée et une gestion plus complète des sessions, reste une amélioration.
+
+#### Frontend Angular
+
+- Conservation des versions du socle fourni : **Angular 20.3** et Nx ; aucune migration vers Angular 21 n’est prévue pour le test.
+- Organisation par fonctionnalité, composants standalone et chargement des pages à la demande.
+- **Reactive Forms typés** pour la saisie, validation ergonomique et affichage des erreurs serveur. Le backend reste l’autorité pour les règles métier.
+- **`@ngrx/signals`** pour les stores par fonctionnalité : données, pagination, chargement et erreurs. Les formulaires conservent leur état de saisie ; les stores coordonnent les services HTTP sans reproduire les décisions métier.
+- Services HTTP typés et intercepteur d’authentification limité à notre API. Traitement commun des `401`, affichage contextualisé des erreurs de champs et des conflits métier.
+- Parcours prévus : connexion, gestion des utilisateurs, liste/création des notes, détail d’une note et gestion de ses dépenses, création des comptes administrateurs réservée au superadministrateur.
+
+#### Stratégie de tests et réalisation
+
+Réalisation en **TDD**, par comportements observables : test, implémentation minimale, puis refactorisation.
+
+| Niveau | Outils et objectifs |
+|---|---|
+| Domaine et validation | xUnit, objets et validateurs réels : invariants, champs et transitions d’état. |
+| Cas d’usage | xUnit et NSubstitute pour les dépendances : quota, inactivité, historique figé et transferts. |
+| Persistance et concurrence | xUnit et Testcontainers PostgreSQL : relations, cascade, exclusions logiques, atomicité, verrouillage et quota partagé entre plusieurs notes. |
+| API et authentification | Tests HTTP et Redis isolé : contrats, statuts, rôles, pagination et révocation. |
+| Angular | Outillage de test du socle : formulaires, transitions des Signal Stores et présentation des erreurs serveur. |
+
+Les tests d’intégration démarrent leurs propres instances PostgreSQL et Redis via **Testcontainers**, avec Docker Desktop. Ils ne dépendent pas des conteneurs applicatifs lancés par Aspire. Les dépendances de test seront ajoutées aux projets concernés.
+
+Scénarios prioritaires :
+
+- Deux ajouts simultanés, y compris dans des notes différentes du même utilisateur et du même mois, alors qu’une seule place reste disponible : un seul ajout réussit.
+- Plusieurs notes pour le même utilisateur et mois : création autorisée, références distinctes et quota calculé sur l’ensemble des dépenses non supprimées.
+- Transfert vers une période au quota atteint : date et rattachement initiaux conservés.
+- Utilisateur inactif : création de notes, ajout de dépenses et transferts interdits ; corrections dans la période existante et suppressions autorisées.
+- Utilisateur supprimé : aucune mutation de son historique possible.
+- Suppression logique d’une dépense : place libérée ; suppression physique d’une note : cascade complète.
+- Réutilisation d’un JWT après déconnexion : accès refusé.
+- Pagination : requête invalide, page vide et total monétaire indépendant de la page.
+
+### Bilan de réalisation et validation
+
+À compléter après implémentation : fonctionnalités effectivement réalisées, tests exécutés et résultats, commandes de lancement et de test, configuration nécessaire et éventuels écarts au cadrage. Aucun test ni mécanisme prévu ci-dessus n’est présenté à ce stade comme déjà exécuté ou livré.
 
 ### Pistes d’amélioration
 
@@ -156,3 +292,4 @@ Une restriction des créations au mois courant a été envisagée pour représen
 - **Consultation des archives** : proposer une section dédiée permettant de consulter, en lecture seule, les notes de frais et dépenses conservées des utilisateurs supprimés logiquement.
 - **Espace de consultation des employés** : permettre aux bénéficiaires de consulter et suivre leurs propres dépenses en lecture seule.
 - **Évolution des données utilisateur** : permettre la modification des coordonnées et définir une politique d’évolution des quotas, notamment leur effet sur les périodes passées.
+- **Durcissement de la sécurité** : politique CSP adaptée, gestion de toutes les sessions et réévaluation du stockage des tokens côté navigateur avant une mise en production.
