@@ -1,6 +1,7 @@
 ﻿using System.Runtime.CompilerServices;
 
 [assembly: InternalsVisibleTo("WebApi.UnitTests")]
+[assembly: InternalsVisibleTo("WebApi.IntegrationTests")]
 [assembly: InternalsVisibleTo("DynamicProxyGenAssembly2")]
 namespace WebApi.Properties
 {
