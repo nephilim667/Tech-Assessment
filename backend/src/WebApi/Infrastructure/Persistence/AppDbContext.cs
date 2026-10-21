@@ -8,6 +8,14 @@ internal sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbC
 {
     public DbSet<UserEntity> Users => Set<UserEntity>();
 
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        base.OnModelCreating(modelBuilder);
+
+        modelBuilder.Entity<UserEntity>()
+            .ToTable("users", table => table.HasCheckConstraint("CK_users_MaxExpensesPerMonth", "\"MaxExpensesPerMonth\" >= 1"));
+    }
+
     internal static async Task SeedAsync(DbContext context, CancellationToken cancellationToken)
     {
         if (await context.Set<UserEntity>().AnyAsync(cancellationToken))
