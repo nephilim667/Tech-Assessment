@@ -5,16 +5,18 @@ namespace WebApi.Domain.Models;
 
 internal sealed class User
 {
-    // Constructeur privé pour forcer le passage par la factory.
-    private User(string firstName, string lastName, string street, string postalCode, string city, int maxExpensesPerMonth)
+    // Constructeur privé pour forcer le passage par les factory create/restore.
+    private User(Guid id, UserDetails details, bool isActive, bool isDeleted)
     {
-        Id = Guid.NewGuid();
-        FirstName = firstName;
-        LastName = lastName;
-        Street = street;
-        PostalCode = postalCode;
-        City = city;
-        MaxExpensesPerMonth = maxExpensesPerMonth;
+        Id = id;
+        FirstName = details.FirstName;
+        LastName = details.LastName;
+        Street = details.Street;
+        PostalCode = details.PostalCode;
+        City = details.City;
+        MaxExpensesPerMonth = details.MaxExpensesPerMonth;
+        IsActive = isActive;
+        IsDeleted = isDeleted;
     }
 
     public Guid Id { get; }
@@ -24,10 +26,10 @@ internal sealed class User
     public string PostalCode { get; }
     public string City { get; }
     public int MaxExpensesPerMonth { get; }
-    public bool IsActive { get; private set; } = true;
+    public bool IsActive { get; private set; }
     public bool IsDeleted { get; private set; }
 
-    // La factory protège les invariants du modèle métier
+    // La factory de creation protège les invariants du modèle métier
     public static Result<User> Create(string firstName, string lastName, string street, string postalCode, string city, int maxExpensesPerMonth)
     {
         if (maxExpensesPerMonth < 1)
@@ -48,8 +50,13 @@ internal sealed class User
         if (string.IsNullOrWhiteSpace(city))
             return Result<User>.Failure(UserErrors.InvalidCity);
 
-        return Result<User>.Success(new User(firstName, lastName, street, postalCode, city, maxExpensesPerMonth));
+        UserDetails details = new (firstName, lastName, street, postalCode, city, maxExpensesPerMonth);
+
+        return Result<User>.Success(new User(Guid.NewGuid(), details, isActive: true, isDeleted: false));
     }
+    // La factory de restoration protège les invariants du modèle métier
+    internal static User Restore(Guid id, UserDetails details, bool isActive, bool isDeleted) =>
+        new (id, details, isActive, isDeleted);
 
     // Acces aux proriétés privées d'activation/désactivation
     public Result<User> Deactivate()

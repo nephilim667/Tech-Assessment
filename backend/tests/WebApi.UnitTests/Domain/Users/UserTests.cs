@@ -309,5 +309,39 @@ namespace WebApi.UnitTests.Domain.Users
             Assert.True(user.IsDeleted);
             Assert.False(user.IsActive);
         }
+
+        [Theory]
+        [InlineData(true, false)]
+        [InlineData(false, false)]
+        [InlineData(false, true)]
+        public void Restore_When_User_Is_Inactive_Preserves_Persisted_State(bool isActive, bool isDeleted)
+        {
+            // Arrange
+            var id = Guid.NewGuid();
+
+            // Act
+            var user = User.Restore(
+                id: id,
+                details: new UserDetails(
+                    FirstName: "Juste",
+                    LastName: "Leblanc",
+                    Street: "10 rue des Lilas",
+                    PostalCode: "75001",
+                    City: "Paris",
+                    MaxExpensesPerMonth: 1),
+                isActive: isActive,                
+                isDeleted: isDeleted);
+
+            // Assert
+            Assert.Equal(id, user.Id);
+            Assert.Equal("Juste", user.FirstName);
+            Assert.Equal("Leblanc", user.LastName);
+            Assert.Equal("10 rue des Lilas", user.Street);
+            Assert.Equal("75001", user.PostalCode);
+            Assert.Equal("Paris", user.City);
+            Assert.Equal(1, user.MaxExpensesPerMonth);
+            Assert.Equal(isActive, user.IsActive);
+            Assert.Equal(isDeleted, user.IsDeleted);
+        }
     }
 }
