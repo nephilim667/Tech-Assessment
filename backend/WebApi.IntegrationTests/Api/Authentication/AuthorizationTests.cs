@@ -2,8 +2,11 @@
 using System.Net.Http.Headers;
 using System.IdentityModel.Tokens.Jwt;
 
+using Microsoft.Extensions.Options;
 using Microsoft.Extensions.DependencyInjection;
 
+using WebApi.Infrastructure.Identity;
+using WebApi.Infrastructure.Identity.Configuration;
 using WebApi.Application.Interfaces.Authentication;
 using WebApi.IntegrationTests.Infrastructure;
 
@@ -86,6 +89,68 @@ namespace WebApi.IntegrationTests.Api.Authentication
                 cancellationToken);
 
             Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        }
+
+        [Theory]
+        [InlineData("expired")]
+        [InlineData("invalid_signature")]
+        [InlineData("invalid_issuer")]
+        [InlineData("invalid_audience")]
+        public async Task GetUsers_When_Token_Validation_Fails_Returns_Unauthorized(string failure)
+        {
+            using var scope = factory.Services.CreateScope();
+
+            var configured = scope.ServiceProvider.GetRequiredService<IOptions<JwtOptions>>().Value;
+
+            var options = new JwtOptions
+            {
+                Issuer = failure == "invalid_issuer" ? "untrusted-issuer" : configured.Issuer,
+                Audience = failure == "invalid_audience" ? "another-audience" : configured.Audience,
+                SigningKey = failure == "invalid_signature" ? new string('X', 64) : configured.SigningKey,
+
+                ExpirationMinutes = configured.ExpirationMinutes
+            };
+
+            var now = DateTimeOffset.UtcNow;
+            var issuedAt = failure == "expired" ? now.AddMinutes(-configured.ExpirationMinutes - 10) : now;
+            var issuer = new JwtTokenIssuer(Options.Create(options), new FixedTimeProvider(issuedAt));
+            var token = issuer.Generate(Guid.NewGuid(), ["SuperAdmin"]);
+
+            using var client = factory.CreateClient();
+
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token.AccessToken);
+
+            using var response = await client.GetAsync(
+                "/api/users",
+                TestContext.Current.CancellationToken);
+
+            Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        }
+
+        [Theory]
+        [InlineData("Admin")]
+        [InlineData("SuperAdmin")]
+        public async Task GetUsers_When_Token_Has_Allowed_Role_Returns_Ok(
+            string role)
+        {
+            using var scope = factory.Services.CreateScope();
+            var issuer = scope.ServiceProvider.GetRequiredService<IAccessTokenIssuer>();
+            var token = issuer.Generate(Guid.NewGuid(), [role]);
+
+            using var client = factory.CreateClient();
+
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token.AccessToken);
+
+            using var response = await client.GetAsync(
+                "/api/users",
+                TestContext.Current.CancellationToken);
+
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        }
+
+        private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
+        {
+            public override DateTimeOffset GetUtcNow() => now;
         }
     }
 }
