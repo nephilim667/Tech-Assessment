@@ -63,7 +63,7 @@ namespace WebApi.IntegrationTests.Api.Users
             using var scope = _factory.Services.CreateScope();
             var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
-            var persisted = await context.Users.AsNoTracking().SingleAsync(user => user.Id == body.Id, cancellationToken);
+            var persisted = await context.Beneficiaries.AsNoTracking().SingleAsync(user => user.Id == body.Id, cancellationToken);
 
             Assert.Equal(request.Street, persisted.Street);
             Assert.Equal(request.PostalCode, persisted.PostalCode);
@@ -92,7 +92,7 @@ namespace WebApi.IntegrationTests.Api.Users
             using var scope = _factory.Services.CreateScope();
             var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
-            var initialCount = await context.Users.CountAsync(cancellationToken);
+            var initialCount = await context.Beneficiaries.CountAsync(cancellationToken);
 
             var request = new CreateUserRequest(
                 "",
@@ -115,7 +115,7 @@ namespace WebApi.IntegrationTests.Api.Users
             Assert.True(errors.GetProperty("FirstName").GetArrayLength() > 0);
             Assert.True(errors.GetProperty("MaxExpensesPerMonth").GetArrayLength() > 0);
 
-            Assert.Equal(initialCount, await context.Users.CountAsync(cancellationToken));
+            Assert.Equal(initialCount, await context.Beneficiaries.CountAsync(cancellationToken));
         }
 
         [Fact]
@@ -162,7 +162,7 @@ namespace WebApi.IntegrationTests.Api.Users
             {
                 var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
-                var entity = await context.Users.SingleAsync(
+                var entity = await context.Beneficiaries.SingleAsync(
                     user => user.Id == created.Id,
                     cancellationToken);
 
@@ -199,7 +199,7 @@ namespace WebApi.IntegrationTests.Api.Users
                 var context = scope.ServiceProvider
                     .GetRequiredService<AppDbContext>();
 
-                context.Users.AddRange(active, inactive, deleted);
+                context.Beneficiaries.AddRange(active, inactive, deleted);
                 await context.SaveChangesAsync(cancellationToken);
             }
 
@@ -281,7 +281,7 @@ namespace WebApi.IntegrationTests.Api.Users
             using var scope = _factory.Services.CreateScope();
             var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
-            var persisted = await context.Users.AsNoTracking()
+            var persisted = await context.Beneficiaries.AsNoTracking()
                 .SingleAsync(user => user.Id == created.Id, cancellationToken);
 
             Assert.Equal(isActive, persisted.IsActive);
@@ -366,7 +366,7 @@ namespace WebApi.IntegrationTests.Api.Users
             using var scope = _factory.Services.CreateScope();
             var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
-            var persisted = await context.Users.AsNoTracking().SingleAsync(user => user.Id == created.Id, cancellationToken);
+            var persisted = await context.Beneficiaries.AsNoTracking().SingleAsync(user => user.Id == created.Id, cancellationToken);
 
             Assert.True(persisted.IsDeleted);
             Assert.False(persisted.IsActive);

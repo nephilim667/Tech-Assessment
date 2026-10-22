@@ -43,7 +43,7 @@ namespace WebApi.IntegrationTests.Persistance
             await repository.AddAsync(user, TestContext.Current.CancellationToken);
 
             // Assert: l'ajout n'a pas encore été sauvegardé.
-            Assert.False(await context.Users.AnyAsync(TestContext.Current.CancellationToken));
+            Assert.False(await context.Beneficiaries.AnyAsync(TestContext.Current.CancellationToken));
 
             var unitOfWork = new UnitOfWork(context);
             await unitOfWork.SaveChangesAsync(TestContext.Current.CancellationToken);
@@ -51,7 +51,7 @@ namespace WebApi.IntegrationTests.Persistance
             // Lecture indépendante du tracking du contexte d’écriture.
             await using var readContext = new AppDbContext(options);
 
-            var entity = await readContext.Users
+            var entity = await readContext.Beneficiaries
                 .AsNoTracking()
                 .SingleAsync(TestContext.Current.CancellationToken);
 
@@ -120,7 +120,7 @@ namespace WebApi.IntegrationTests.Persistance
             // Assert : nouvelle lecture indépendante.
             await using var readContext = new AppDbContext(options);
 
-            var persisted = await readContext.Users
+            var persisted = await readContext.Beneficiaries
                 .AsNoTracking()
                 .SingleAsync(
                     entity => entity.Id == user.Id,
@@ -185,7 +185,7 @@ namespace WebApi.IntegrationTests.Persistance
 
             await using var readContext = new AppDbContext(options);
 
-            Assert.False(await readContext.Users.AnyAsync(
+            Assert.False(await readContext.Beneficiaries.AnyAsync(
                 entity => entity.Id == user.Id,
                 cancellationToken));
         }
@@ -246,7 +246,7 @@ namespace WebApi.IntegrationTests.Persistance
             var exception = await Assert.ThrowsAsync<InvalidOperationException>(
                 async () =>
                 {
-                    await secondContext.Users
+                    await secondContext.Beneficiaries
                         .FromSqlInterpolated($"""
                             SELECT *
                             FROM users

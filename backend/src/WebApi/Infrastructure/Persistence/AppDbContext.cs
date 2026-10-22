@@ -1,18 +1,20 @@
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
 using WebApi.Infrastructure.Persistence.Entities;
 
 namespace WebApi.Infrastructure.Persistence;
 
-internal sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
+internal sealed class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbContext<IdentityUser<Guid>, IdentityRole<Guid>, Guid>(options)
 {
-    public DbSet<UserEntity> Users => Set<UserEntity>();
+    public DbSet<UserEntity> Beneficiaries => Set<UserEntity>();
 
-    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    protected override void OnModelCreating(ModelBuilder builder)
     {
-        base.OnModelCreating(modelBuilder);
+        base.OnModelCreating(builder);
 
-        modelBuilder.Entity<UserEntity>()
+        builder.Entity<UserEntity>()
             .ToTable("users", table => table.HasCheckConstraint("CK_users_MaxExpensesPerMonth", "\"MaxExpensesPerMonth\" >= 1"));
     }
 

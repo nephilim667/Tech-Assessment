@@ -1,4 +1,5 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 
 using Testcontainers.PostgreSql;
 using WebApi.Infrastructure.Persistence;
@@ -31,9 +32,15 @@ namespace WebApi.IntegrationTests.Persistance
 
             Assert.Empty(pendingMigrations);
 
-            var userCount = await context.Users.CountAsync(TestContext.Current.CancellationToken);
+            var userCount = await context.Beneficiaries.CountAsync(TestContext.Current.CancellationToken);
 
             Assert.Equal(0, userCount);
+
+            var accountCount = await context.Set<IdentityUser<Guid>>().CountAsync(TestContext.Current.CancellationToken);
+            var roleCount = await context.Set<IdentityRole<Guid>>().CountAsync(TestContext.Current.CancellationToken);
+
+            Assert.Equal(0, accountCount);
+            Assert.Equal(0, roleCount);
         }
     }
 }

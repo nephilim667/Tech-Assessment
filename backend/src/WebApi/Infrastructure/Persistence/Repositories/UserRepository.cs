@@ -11,7 +11,7 @@ namespace WebApi.Infrastructure.Persistence.Repositories
     {
         public async Task<IReadOnlyList<User>> GetAllAsync(CancellationToken cancellationToken = default)
         {
-            var entities = await context.Users
+            var entities = await context.Beneficiaries
                 .AsNoTracking()
                 .Where(user => !user.IsDeleted)
                 .OrderBy(user => user.LastName)
@@ -24,7 +24,7 @@ namespace WebApi.Infrastructure.Persistence.Repositories
 
         public async Task<User?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
         {
-            var entity = await context.Users
+            var entity = await context.Beneficiaries
                 .AsNoTracking()
                 .SingleOrDefaultAsync(
                     user => user.Id == id && !user.IsDeleted,
@@ -35,12 +35,12 @@ namespace WebApi.Infrastructure.Persistence.Repositories
 
         public async Task AddAsync(User user, CancellationToken cancellationToken = default)
         {
-            await context.Users.AddAsync(user.ToEntity(), cancellationToken);
+            await context.Beneficiaries.AddAsync(user.ToEntity(), cancellationToken);
         }
 
         public async Task UpdateStateAsync(User user, CancellationToken cancellationToken = default)
         {
-            var entity = await context.Users.SingleAsync(
+            var entity = await context.Beneficiaries.SingleAsync(
                 entity => entity.Id == user.Id && !entity.IsDeleted,
                 cancellationToken);
 
@@ -52,7 +52,7 @@ namespace WebApi.Infrastructure.Persistence.Repositories
             if (context.Database.CurrentTransaction is null)
                 throw new InvalidOperationException("La lecture verrouillée nécessite une transaction active.");
 
-            var entity = await context.Users
+            var entity = await context.Beneficiaries
                 .FromSqlInterpolated($"""
                     SELECT *
                     FROM users
