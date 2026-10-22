@@ -1,6 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 
 using Microsoft.EntityFrameworkCore;
+using Scalar.AspNetCore;
 
 using WebApi.Infrastructure.Api;
 using WebApi.Infrastructure.Api.Users;
@@ -40,6 +41,7 @@ if (app.Environment.IsDevelopment())
         return;
     }
     app.MapOpenApi();
+    app.MapScalarApiReference(options => options.WithTitle("N2JSoft — API de gestion des dépenses"));
 }
 
 app.UseHttpsRedirection();
