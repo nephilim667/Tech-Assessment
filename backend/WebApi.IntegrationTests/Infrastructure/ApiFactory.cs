@@ -11,6 +11,7 @@ using Xunit;
 using Testcontainers.PostgreSql;
 
 using WebApi.Infrastructure.Persistence;
+using WebApi.Infrastructure.Identity.Configuration;
 
 
 namespace WebApi.IntegrationTests.Infrastructure
@@ -32,8 +33,12 @@ namespace WebApi.IntegrationTests.Infrastructure
                 services.RemoveAll<
                     IDbContextOptionsConfiguration<AppDbContext>>();
 
-                services.AddDbContext<AppDbContext>(options =>
-                    options.UseNpgsql(_postgres.GetConnectionString()));
+                services.AddDbContext<AppDbContext>(options =>  options.UseNpgsql(_postgres.GetConnectionString()));
+                services.Configure<BootstrapAdminOptions>(options =>
+                {
+                    options.Email = "superadmin@example.test";
+                    options.Password = "Test-SuperAdmin@2026!";
+                });
             });
         }
 

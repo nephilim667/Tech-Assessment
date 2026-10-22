@@ -5,6 +5,7 @@ using Scalar.AspNetCore;
 
 using WebApi.Infrastructure.Api;
 using WebApi.Infrastructure.Api.Users;
+using WebApi.Infrastructure.Identity;
 using WebApi.Infrastructure.Persistence;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -20,7 +21,8 @@ builder.Services
     .AddOpenApi()
     .AddPersistence()
     .AddApplication()
-    .AddValidation();
+    .AddValidation()
+    .AddIdentityServices();
 
 builder.Services.AddHealthChecks();
 
@@ -31,13 +33,13 @@ if (app.Environment.IsDevelopment())
     try
     {
         using var sp = app.Services.CreateScope();
-        await sp.ServiceProvider.GetRequiredService<AppDbContext>()
-            .Database.MigrateAsync();
+        await sp.ServiceProvider.GetRequiredService<AppDbContext>().Database.MigrateAsync();
+        await sp.ServiceProvider.GetRequiredService<IdentitySeeder>().SeedSuperAdminAsync();
     }
     catch (Exception e)
     {
         app.Services.GetRequiredService<ILogger<Program>>()
-            .LogError(e, "An error occurred while migrating the database.");
+            .LogError(e, "An error occurred while initializing the database and Identity.");
         return;
     }
     app.MapOpenApi();

@@ -4,6 +4,7 @@
         <TargetFramework>net9.0</TargetFramework>
         <Nullable>enable</Nullable>
         <ImplicitUsings>enable</ImplicitUsings>
+        <UserSecretsId>1f009f6d-a60e-472e-aa4c-1a0640b59133</UserSecretsId>
     </PropertyGroup>
 
     <ItemGroup>
@@ -26,10 +27,6 @@
           <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>
         <PackageReference Include="Scalar.AspNetCore" Version="2.18.2" />
-    </ItemGroup>
-
-    <ItemGroup>
-      <Folder Include="Application\Common\" />
     </ItemGroup>
 
 </Project>
