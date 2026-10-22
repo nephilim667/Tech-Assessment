@@ -39,6 +39,13 @@ namespace WebApi.IntegrationTests.Infrastructure
                     options.Email = "superadmin@example.test";
                     options.Password = "Test-SuperAdmin@2026!";
                 });
+                services.Configure<JwtOptions>(options =>
+                {
+                    options.Issuer = "n2jsoft-tests";
+                    options.Audience = "n2jsoft-api-tests";
+                    options.SigningKey = new string('K', 64);
+                    options.ExpirationMinutes = 60;
+                });
             });
         }
 

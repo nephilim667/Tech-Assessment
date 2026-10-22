@@ -55,9 +55,7 @@ namespace WebApi.Infrastructure.Identity
                     Email = options.Email
                 };
 
-                var createResult = await userManager.CreateAsync(
-                    account,
-                    options.Password);
+                var createResult = await userManager.CreateAsync(account, options.Password);
 
                 EnsureSuccess(createResult, "créer le superadministrateur");
             }

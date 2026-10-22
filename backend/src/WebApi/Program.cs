@@ -5,6 +5,8 @@ using Scalar.AspNetCore;
 
 using WebApi.Infrastructure.Api;
 using WebApi.Infrastructure.Api.Users;
+using WebApi.Infrastructure.Api.Authentication;
+
 using WebApi.Infrastructure.Identity;
 using WebApi.Infrastructure.Persistence;
 
@@ -22,7 +24,8 @@ builder.Services
     .AddPersistence()
     .AddApplication()
     .AddValidation()
-    .AddIdentityServices();
+    .AddIdentityServices()
+    .AddTokenIssuance();
 
 builder.Services.AddHealthChecks();
 
@@ -48,7 +51,9 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
+app.MapAuthenticationEndpoints();
 app.MapUserEndpoints();
+
 app.MapHealthChecks("/health");
 
 await app.RunAsync();

@@ -91,6 +91,16 @@ La page de visualisation d'une note de frais permet :
 
 ## Mes Notes
 
+### Realisation
+- Temps Total : 40h
+- Temps de cadrage : 4h
+- Temps codage API : 30h
+- Temps codage Front : 6h
+
+### TEST Account 
+- Email et Password sont généré par aspire au démarrage
+- les valeurs sont a récupéré dans les propriétés de webapi : BootstrapAdmin__Email et BootstrapAdmin__Password
+
 ### Démarche
 
 Le travail est organisé en trois étapes : analyse fonctionnelle, analyse technique, puis réalisation. Cette section présente les cadrages fonctionnel et technique préalables à l’implémentation ; elle ne constitue pas un bilan des fonctionnalités déjà réalisées.
