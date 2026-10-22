@@ -37,5 +37,33 @@ namespace WebApi.Infrastructure.Persistence.Repositories
         {
             await context.Users.AddAsync(user.ToEntity(), cancellationToken);
         }
+
+        public async Task UpdateStateAsync(User user, CancellationToken cancellationToken = default)
+        {
+            var entity = await context.Users.SingleAsync(
+                entity => entity.Id == user.Id && !entity.IsDeleted,
+                cancellationToken);
+
+            user.ApplyStateTo(entity);
+        }
+
+        public async Task<User?> GetByIdForUpdateAsync(Guid id, CancellationToken cancellationToken = default)
+        {
+            if (context.Database.CurrentTransaction is null)
+                throw new InvalidOperationException("La lecture verrouillée nécessite une transaction active.");
+
+            var entity = await context.Users
+                .FromSqlInterpolated($"""
+                    SELECT *
+                    FROM users
+                    WHERE "Id" = {id}
+                    AND NOT "IsDeleted"
+                    FOR UPDATE
+                 """)
+                .AsNoTracking()
+                .SingleOrDefaultAsync(cancellationToken);
+
+            return entity?.ToDomain();
+        }
     }
 }

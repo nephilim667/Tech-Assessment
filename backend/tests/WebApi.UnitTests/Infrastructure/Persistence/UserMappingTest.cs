@@ -74,4 +74,39 @@ public sealed class UserMappingTests
         Assert.Equal(isActive, entity.IsActive);
         Assert.Equal(isDeleted, entity.IsDeleted);
     }
+
+    [Fact]
+    public void ApplyStateTo_Updates_State_Without_Changing_User_Profile()
+    {
+        // Arrange
+        var user = User.Create(
+            "Juste",
+            "Leblanc",
+            "10 rue des Lilas",
+            "75001",
+            "Paris",
+            5).Value;
+
+        user.Delete();
+
+        var entity = user.ToEntity();
+
+        // Simule l’état de l’entité avant la suppression.
+        entity.IsActive = true;
+        entity.IsDeleted = false;
+
+        // Act
+        user.ApplyStateTo(entity);
+
+        // Assert
+        Assert.Equal(user.Id, entity.Id);
+        Assert.Equal("Juste", entity.FirstName);
+        Assert.Equal("Leblanc", entity.LastName);
+        Assert.Equal("10 rue des Lilas", entity.Street);
+        Assert.Equal("75001", entity.PostalCode);
+        Assert.Equal("Paris", entity.City);
+        Assert.Equal(5, entity.MaxExpensesPerMonth);
+        Assert.False(entity.IsActive);
+        Assert.True(entity.IsDeleted);
+    }
 }

@@ -1,7 +1,7 @@
 ﻿using WebApi.Application.Interfaces.Users;
 using WebApi.Infrastructure.Api.Users.Mappings;
 
-namespace WebApi.Infrastructure.Api.Users
+namespace WebApi.Infrastructure.Api.Users.Endpoints
 {
     internal static class GetUsersEndpoint
     {

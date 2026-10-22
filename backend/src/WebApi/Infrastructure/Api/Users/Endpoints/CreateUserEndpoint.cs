@@ -4,7 +4,7 @@ using WebApi.Application.Interfaces.Users;
 using WebApi.Infrastructure.Api.Users.Mappings;
 using WebApi.Infrastructure.Api.Users.Contracts;
 
-namespace WebApi.Infrastructure.Api.Users
+namespace WebApi.Infrastructure.Api.Users.Endpoints
 {
     internal static class CreateUserEndpoint
     {

@@ -35,5 +35,17 @@ namespace WebApi.Infrastructure.Persistence.Mappings
                 IsDeleted = user.IsDeleted
             };
         }
+
+        public static void ApplyStateTo(this User user, UserEntity entity)
+        {
+            if (user.Id != entity.Id)
+            {
+                throw new InvalidOperationException(
+                    "Les identifiants de l’utilisateur et de l’entité doivent correspondre.");
+            }
+
+            entity.IsActive = user.IsActive;
+            entity.IsDeleted = user.IsDeleted;
+        }
     }
 }

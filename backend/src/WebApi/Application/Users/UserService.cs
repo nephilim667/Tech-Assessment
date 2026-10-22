@@ -35,5 +35,51 @@ namespace WebApi.Application.Users
 
             return result;
         }
+
+        public Task<Result<User>> SetActiveAsync(Guid id, bool isActive, CancellationToken cancellationToken = default)
+        {
+            return unitOfWork.ExecuteInTransactionAsync(
+                async token =>
+                {
+                    var user = await repository.GetByIdForUpdateAsync(id, token);
+
+                    if (user is null)
+                        return Result<User>.Failure(UserErrors.NotFound);
+
+                    var result = isActive ? user.Activate() : user.Deactivate();
+
+                    if (!result.IsSuccess)
+                        return result;
+
+                    await repository.UpdateStateAsync(user, token);
+                    await unitOfWork.SaveChangesAsync(token);
+
+                    return result;
+                },
+                cancellationToken);
+        }
+
+        public Task<Result<User>> DeleteAsync(Guid id, CancellationToken cancellationToken = default)
+        {
+            return unitOfWork.ExecuteInTransactionAsync(
+                async token =>
+                {
+                    var user = await repository.GetByIdForUpdateAsync(id, token);
+
+                    if (user is null)
+                        return Result<User>.Failure(UserErrors.NotFound);
+
+                    var result = user.Delete();
+
+                    if (!result.IsSuccess)
+                        return result;
+
+                    await repository.UpdateStateAsync(user, token);
+                    await unitOfWork.SaveChangesAsync(token);
+
+                    return result;
+                },
+                cancellationToken);
+        }
     }
 }

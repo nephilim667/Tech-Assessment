@@ -32,6 +32,7 @@ internal static class DependencyInjectionExtensions
     this IServiceCollection services)
     {
         services.AddScoped<IValidator<CreateUserRequest>, CreateUserRequestValidator>();
+        services.AddScoped<IValidator<SetUserStatusRequest>, SetUserStatusRequestValidator>();
 
         return services;
     }

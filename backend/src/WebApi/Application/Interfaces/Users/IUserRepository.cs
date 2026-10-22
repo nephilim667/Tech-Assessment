@@ -7,5 +7,7 @@ namespace WebApi.Application.Interfaces.Users
         Task<IReadOnlyList<User>> GetAllAsync(CancellationToken cancellationToken = default);
         Task<User?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
         Task AddAsync(User user, CancellationToken cancellationToken = default);
+        Task UpdateStateAsync(User user, CancellationToken cancellationToken = default);
+        Task<User?> GetByIdForUpdateAsync(Guid id, CancellationToken cancellationToken = default);
     }
 }

@@ -1,7 +1,5 @@
 ﻿using Microsoft.EntityFrameworkCore;
 
-using Xunit;
-
 using Testcontainers.PostgreSql;
 using WebApi.Infrastructure.Persistence;
 
@@ -16,7 +14,7 @@ namespace WebApi.IntegrationTests.Persistance
             await using var postgres = new PostgreSqlBuilder("postgres:17.4")
                 .Build();
 
-            await postgres.StartAsync();
+            await postgres.StartAsync(TestContext.Current.CancellationToken);
 
             var options = new DbContextOptionsBuilder<AppDbContext>()
                 .UseNpgsql(postgres.GetConnectionString())
@@ -25,15 +23,15 @@ namespace WebApi.IntegrationTests.Persistance
             await using var context = new AppDbContext(options);
 
             // Act
-            await context.Database.MigrateAsync();
+            await context.Database.MigrateAsync(TestContext.Current.CancellationToken);
 
             // Assert
             var pendingMigrations =
-                await context.Database.GetPendingMigrationsAsync();
+                await context.Database.GetPendingMigrationsAsync(TestContext.Current.CancellationToken);
 
             Assert.Empty(pendingMigrations);
 
-            var userCount = await context.Users.CountAsync();
+            var userCount = await context.Users.CountAsync(TestContext.Current.CancellationToken);
 
             Assert.Equal(0, userCount);
         }

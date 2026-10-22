@@ -234,5 +234,192 @@ namespace WebApi.IntegrationTests.Api.Users
                 };
             }
         }
+
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public async Task SetStatus_When_User_Exists_Persists_Requested_State(bool isActive)
+        {
+            var cancellationToken = TestContext.Current.CancellationToken;
+            using var client = _factory.CreateClient();
+
+            using var createResponse = await client.PostAsJsonAsync("/api/users",
+                new CreateUserRequest(
+                    "Alice", "Martin", "12 rue des Fleurs",
+                    "33000", "Bordeaux", 5),
+                cancellationToken);
+
+            Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
+
+            var created = await createResponse.Content.ReadFromJsonAsync<UserResponse>(cancellationToken);
+
+            Assert.NotNull(created);
+
+            // Positionne d’abord l’utilisateur dans l’état opposé.
+            using var initialResponse = await client.PutAsJsonAsync(
+                $"/api/users/{created.Id}/status",
+                new SetUserStatusRequest(!isActive),
+                cancellationToken);
+
+            Assert.Equal(HttpStatusCode.OK, initialResponse.StatusCode);
+
+            // Act
+            using var response = await client.PutAsJsonAsync(
+                $"/api/users/{created.Id}/status",
+                new SetUserStatusRequest(isActive),
+                cancellationToken);
+
+            // Assert
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+            var updated = await response.Content.ReadFromJsonAsync<UserResponse>(cancellationToken);
+
+            Assert.NotNull(updated);
+            Assert.Equal(created.Id, updated.Id);
+            Assert.Equal(isActive, updated.IsActive);
+
+            using var scope = _factory.Services.CreateScope();
+            var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+            var persisted = await context.Users.AsNoTracking()
+                .SingleAsync(user => user.Id == created.Id, cancellationToken);
+
+            Assert.Equal(isActive, persisted.IsActive);
+            Assert.False(persisted.IsDeleted);
+        }
+
+        [Fact]
+        public async Task SetStatus_When_User_Is_Missing_Returns_NotFound()
+        {
+            using var client = _factory.CreateClient();
+            var cancellationToken = TestContext.Current.CancellationToken;
+
+            using var response = await client.PutAsJsonAsync(
+                $"/api/users/{Guid.NewGuid()}/status",
+                new SetUserStatusRequest(false),
+                cancellationToken);
+
+            Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+
+            using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellationToken));
+
+            Assert.Equal("user.not_found", body.RootElement.GetProperty("code").GetString());
+        }
+
+        [Fact]
+        public async Task SetStatus_When_Status_Is_Omitted_Returns_ValidationError()
+        {
+            using var client = _factory.CreateClient();
+            var cancellationToken = TestContext.Current.CancellationToken;
+
+            using var response = await client.PutAsJsonAsync(
+                $"/api/users/{Guid.NewGuid()}/status",
+                new { },
+                cancellationToken);
+
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+            using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellationToken));
+
+            Assert.True(body.RootElement
+                .GetProperty("errors")
+                .GetProperty("IsActive")
+                .GetArrayLength() > 0);
+        }
+
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public async Task DeleteUser_Preserves_Record_And_Hides_User(bool isActive)
+        {
+            var cancellationToken = TestContext.Current.CancellationToken;
+            using var client = _factory.CreateClient();
+
+            using var createResponse = await client.PostAsJsonAsync(
+                "/api/users",
+                new CreateUserRequest(
+                    "Paul", "Durand", "8 rue des Écoles",
+                    "44000", "Nantes", 5),
+                cancellationToken);
+
+            Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
+
+            var created = await createResponse.Content.ReadFromJsonAsync<UserResponse>(cancellationToken);
+
+            Assert.NotNull(created);
+
+            using var statusResponse = await client.PutAsJsonAsync(
+                $"/api/users/{created.Id}/status",
+                new SetUserStatusRequest(isActive),
+                cancellationToken);
+
+            Assert.Equal(HttpStatusCode.OK, statusResponse.StatusCode);
+
+            // Act
+            using var response = await client.DeleteAsync(
+                $"/api/users/{created.Id}",
+                cancellationToken);
+
+            // Assert : suppression logique, sans perte du profil.
+            Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+
+            using var scope = _factory.Services.CreateScope();
+            var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+            var persisted = await context.Users.AsNoTracking().SingleAsync(user => user.Id == created.Id, cancellationToken);
+
+            Assert.True(persisted.IsDeleted);
+            Assert.False(persisted.IsActive);
+            Assert.Equal(created.FirstName, persisted.FirstName);
+            Assert.Equal(created.MaxExpensesPerMonth, persisted.MaxExpensesPerMonth);
+
+            using var getResponse = await client.GetAsync(
+                $"/api/users/{created.Id}",
+                cancellationToken);
+
+            Assert.Equal(HttpStatusCode.NotFound, getResponse.StatusCode);
+
+            using var listResponse = await client.GetAsync(
+                "/api/users",
+                cancellationToken);
+
+            Assert.Equal(HttpStatusCode.OK, listResponse.StatusCode);
+
+            var users = await listResponse.Content.ReadFromJsonAsync<UserResponse[]>(cancellationToken);
+
+            Assert.NotNull(users);
+            Assert.DoesNotContain(users, user => user.Id == created.Id);
+
+            // L’historique supprimé ne peut pas être réactivé.
+            using var reactivateResponse = await client.PutAsJsonAsync(
+                $"/api/users/{created.Id}/status",
+                new SetUserStatusRequest(true),
+                cancellationToken);
+
+            Assert.Equal(HttpStatusCode.NotFound, reactivateResponse.StatusCode);
+
+            using var secondDeleteResponse = await client.DeleteAsync(
+                $"/api/users/{created.Id}",
+                cancellationToken);
+
+            Assert.Equal(HttpStatusCode.NotFound, secondDeleteResponse.StatusCode);
+        }
+
+        [Fact]
+        public async Task DeleteUser_When_User_Is_Missing_Returns_NotFound()
+        {
+            using var client = _factory.CreateClient();
+            var cancellationToken = TestContext.Current.CancellationToken;
+
+            using var response = await client.DeleteAsync(
+                $"/api/users/{Guid.NewGuid()}",
+                cancellationToken);
+
+            Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+
+            using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellationToken));
+
+            Assert.Equal("user.not_found",body.RootElement.GetProperty("code").GetString());
+        }
     }
 }
