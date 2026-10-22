@@ -1,6 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 
 using Microsoft.EntityFrameworkCore;
+
 using Scalar.AspNetCore;
 
 using WebApi.Infrastructure.Api;
@@ -31,7 +32,9 @@ builder.Services
     .AddValidation()
     .AddIdentityServices()
     .AddTokenIssuance()
-    .AddBearerAuthentication();
+    .AddBearerAuthentication()
+    .AddErrorHandling();
+
 
 builder.Services.AddHealthChecks();
 
@@ -57,6 +60,8 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+app.UseExceptionHandler();
+
 app.UseAuthentication();
 app.UseAuthorization();
 

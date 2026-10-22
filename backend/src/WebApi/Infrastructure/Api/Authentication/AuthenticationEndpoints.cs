@@ -11,11 +11,16 @@ namespace WebApi.Infrastructure.Api.Authentication
             var authentication = endpoints.MapGroup("/api/auth").WithTags("Authentication");
 
             authentication.MapPost("/login", AuthenticateEndpoint.AuthenticateAsync)
-                .AddEndpointFilter<ValidationFilter<AuthenticationRequest>>()
-                .AllowAnonymous()
-                .Produces<AuthenticationResponse>()
-                .ProducesProblem(StatusCodes.Status401Unauthorized)
-                .ProducesValidationProblem();
+                          .AddEndpointFilter<ValidationFilter<AuthenticationRequest>>()
+                          .AllowAnonymous()
+                          .Produces<AuthenticationResponse>()
+                          .ProducesProblem(StatusCodes.Status401Unauthorized)
+                          .ProducesValidationProblem();
+
+            authentication.MapPost("/logout", LogoutEndpoint.LogoutAsync)
+                          .RequireAuthorization()
+                          .Produces(StatusCodes.Status204NoContent)
+                          .Produces(StatusCodes.Status401Unauthorized);
 
             return endpoints;
         }

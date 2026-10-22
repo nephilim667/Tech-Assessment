@@ -7,6 +7,7 @@ using WebApi.Application.Interfaces.Users;
 using WebApi.Application.Users;
 using WebApi.Infrastructure.Api.Authentication.Contracts;
 using WebApi.Infrastructure.Api.Authentication.Validators;
+using WebApi.Infrastructure.Api.Common.ExceptionHandler;
 using WebApi.Infrastructure.Api.Users.Contracts;
 using WebApi.Infrastructure.Api.Users.Validators;
 using WebApi.Infrastructure.Identity;
@@ -39,6 +40,14 @@ internal static class DependencyInjectionExtensions
         services.AddScoped<IValidator<CreateUserRequest>, CreateUserRequestValidator>();
         services.AddScoped<IValidator<SetUserStatusRequest>, SetUserStatusRequestValidator>();
         services.AddScoped<IValidator<AuthenticationRequest>, AuthenticationRequestValidator>();
+
+        return services;
+    }
+
+    public static IServiceCollection AddErrorHandling(this IServiceCollection services)
+    {
+        services.AddProblemDetails();
+        services.AddExceptionHandler<RedisExceptionHandler>();
 
         return services;
     }

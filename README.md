@@ -255,6 +255,7 @@ La configuration doit rester proportionnée au test, sans présenter les protect
 - **Limite acceptée** : `sessionStorage` est accessible au JavaScript de l’origine ; une XSS pourrait voler le token. Redis permet de le révoquer, mais n’empêche ni son vol ni son utilisation avant révocation.
 - La conservation des révocations Redis jusqu’à expiration doit être assurée. Si la vérification est indisponible, l’accès protégé doit être refusé ; la déconnexion ne doit pas être annoncée comme réussie si la révocation n’a pas été enregistrée.
 - La révocation concerne le token courant, pas toutes les sessions du compte. Le durcissement complémentaire, notamment une politique CSP adaptée et une gestion plus complète des sessions, reste une amélioration.
+- supprimer ou perdre le volume redis efface les révocations. Si cela arrive, il faut également invalider les JWT encore en circulation, par exemple en changeant la clé de signature
 
 #### Frontend Angular
 

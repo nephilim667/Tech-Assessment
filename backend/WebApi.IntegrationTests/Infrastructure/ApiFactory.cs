@@ -11,6 +11,8 @@ using Microsoft.Extensions.Options;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
+using StackExchange.Redis;
+using Testcontainers.Redis;
 using Testcontainers.PostgreSql;
 
 using WebApi.Infrastructure.Identity;
@@ -23,6 +25,7 @@ namespace WebApi.IntegrationTests.Infrastructure
     public sealed  class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
     {
         private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:17.4").Build();
+        private readonly RedisContainer _redis = new RedisBuilder("redis:7.4").Build();
 
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
@@ -34,8 +37,10 @@ namespace WebApi.IntegrationTests.Infrastructure
                 // Remplace la configuration PostgreSQL fournie par Aspire.
                 services.RemoveAll<AppDbContext>();
                 services.RemoveAll<DbContextOptions<AppDbContext>>();
-                services.RemoveAll<
-                    IDbContextOptionsConfiguration<AppDbContext>>();
+                services.RemoveAll<IDbContextOptionsConfiguration<AppDbContext>>();
+                services.RemoveAll<IConnectionMultiplexer>();
+
+                services.AddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(_redis.GetConnectionString()));
 
                 services.AddDbContext<AppDbContext>(options =>  options.UseNpgsql(_postgres.GetConnectionString()));
                 services.Configure<BootstrapAdminOptions>(options =>
@@ -58,6 +63,7 @@ namespace WebApi.IntegrationTests.Infrastructure
             try
             {
                 await _postgres.StartAsync();
+                await _redis.StartAsync();
 
                 using var scope = Services.CreateScope();
                 var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -78,7 +84,14 @@ namespace WebApi.IntegrationTests.Infrastructure
             }
             finally
             {
-                await _postgres.DisposeAsync();
+                try
+                {
+                    await _postgres.DisposeAsync();
+                }
+                finally
+                {
+                    await _redis.DisposeAsync();
+                }
             }
         }
 

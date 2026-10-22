@@ -29,7 +29,11 @@ var bootstrapPassword = builder.AddParameter("bootstrap-admin-password",
 var postgres = builder.AddPostgres("postgres").WithDataVolume();
 var mainDatabase = postgres.AddDatabase("database");
 
-var cache = builder.AddRedis("cache");
+var cache = builder.AddRedis("cache").WithDataVolume()
+                   .WithArgs("--appendonly", "yes",
+                             "--appendfsync", "always",
+                             "--maxmemory-policy", "noeviction");
+
 var webapi = builder.AddProject<Projects.WebApi>("webapi")
     .WithReference(cache)
     .WithReference(mainDatabase)
@@ -42,6 +46,7 @@ var webapi = builder.AddProject<Projects.WebApi>("webapi")
     .WithEnvironment("Jwt__SigningKey", jwtSigningKey)
     .WithEnvironment("BootstrapAdmin__Email", "superadmin@n2jsoft.local")
     .WithEnvironment("BootstrapAdmin__Password", bootstrapPassword);
+
 var angular = builder.AddNpmApp("angular", "../../../frontend/")
     .WithReference(webapi)
     .WaitFor(webapi)

@@ -1,5 +1,6 @@
 ﻿using System.Net;
 using System.Net.Http.Headers;
+using System.IdentityModel.Tokens.Jwt;
 
 using Microsoft.Extensions.DependencyInjection;
 
@@ -50,6 +51,41 @@ namespace WebApi.IntegrationTests.Api.Authentication
             using var response = await client.GetAsync("/api/users", TestContext.Current.CancellationToken);
 
             Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        }
+
+        [Fact]
+        public async Task GetUsers_When_Token_Is_Revoked_Returns_Unauthorized()
+        {
+            var cancellationToken = TestContext.Current.CancellationToken;
+
+            using var client = await factory.CreateSuperAdminClientAsync(cancellationToken);
+
+            var tokenValue = client.DefaultRequestHeaders.Authorization!.Parameter!;
+            var token = new JwtSecurityTokenHandler().ReadJwtToken(tokenValue);
+            var tokenId = token.Claims.Single(claim => claim.Type == JwtRegisteredClaimNames.Jti).Value;
+
+            // Le token est accepté avant révocation.
+            using var initialResponse = await client.GetAsync(
+                "/api/users",
+                cancellationToken);
+
+            Assert.Equal(HttpStatusCode.OK, initialResponse.StatusCode);
+
+            using var scope = factory.Services.CreateScope();
+
+            var store = scope.ServiceProvider.GetRequiredService<ITokenRevocationStore>();
+
+            await store.RevokeAsync(tokenId,
+                new DateTimeOffset(
+                    DateTime.SpecifyKind(token.ValidTo, DateTimeKind.Utc)),
+                    cancellationToken);
+
+            // Le même token doit maintenant être refusé.
+            using var response = await client.GetAsync(
+                "/api/users",
+                cancellationToken);
+
+            Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         }
     }
 }

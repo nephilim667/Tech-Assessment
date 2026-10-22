@@ -106,5 +106,40 @@ namespace WebApi.IntegrationTests.Api.Authentication
             Assert.True(errors.GetProperty("Email").GetArrayLength() > 0);
             Assert.True(errors.GetProperty("Password").GetArrayLength() > 0);
         }
+
+        [Fact]
+        public async Task Logout_Revokes_Current_Token_Without_Revoking_Other_Session()
+        {
+            var cancellationToken = TestContext.Current.CancellationToken;
+
+            using var firstClient = await factory.CreateSuperAdminClientAsync(cancellationToken);
+            using var secondClient = await factory.CreateSuperAdminClientAsync(cancellationToken);
+
+            // Act
+            using var logoutResponse = await firstClient.PostAsync("/api/auth/logout", content: null, cancellationToken: cancellationToken);
+
+            // Assert
+            Assert.Equal(HttpStatusCode.NoContent, logoutResponse.StatusCode);
+
+            // Le client conserve volontairement le token pour tenter de le rejouer.
+            using var replayResponse = await firstClient.GetAsync("/api/users", cancellationToken);
+
+            Assert.Equal(HttpStatusCode.Unauthorized, replayResponse.StatusCode);
+
+            // Un autre token du même compte reste valide.
+            using var otherSessionResponse = await secondClient.GetAsync("/api/users", cancellationToken);
+
+            Assert.Equal(HttpStatusCode.OK, otherSessionResponse.StatusCode);
+        }
+
+        [Fact]
+        public async Task Logout_When_Anonymous_Returns_Unauthorized()
+        {
+            using var client = factory.CreateClient();
+
+            using var response = await client.PostAsync("/api/auth/logout", content: null, cancellationToken: TestContext.Current.CancellationToken);
+
+            Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        }
     }
 }

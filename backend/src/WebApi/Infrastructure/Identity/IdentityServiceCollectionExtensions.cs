@@ -64,6 +64,8 @@ namespace WebApi.Infrastructure.Identity
                         RoleClaimType = "role",
                         ClockSkew = TimeSpan.Zero
                     };
+
+                    bearer.EventsType = typeof(RevocationJwtBearerEvents);
                 });
 
             services.AddAuthorization(options =>
@@ -74,6 +76,9 @@ namespace WebApi.Infrastructure.Identity
                         .RequireAuthenticatedUser()
                         .RequireRole(SecurityRoles.Admin, SecurityRoles.SuperAdmin));
             });
+
+            services.AddSingleton<ITokenRevocationStore, RedisTokenRevocationStore>();
+            services.AddScoped<RevocationJwtBearerEvents>();
 
             return services;
         }
