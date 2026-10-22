@@ -6,6 +6,7 @@ using Scalar.AspNetCore;
 using WebApi.Infrastructure.Api;
 using WebApi.Infrastructure.Api.Users;
 using WebApi.Infrastructure.Api.Authentication;
+using WebApi.Infrastructure.Api.Common.OpenApi;
 
 using WebApi.Infrastructure.Identity;
 using WebApi.Infrastructure.Persistence;
@@ -20,12 +21,17 @@ builder.AddNpgsqlDbContext<AppDbContext>(connectionName: "database",
             await AppDbContext.SeedAsync(context, cancellationToken)));
 
 builder.Services
-    .AddOpenApi()
+    .AddOpenApi(options =>
+    {
+        options.AddDocumentTransformer<BearerSecurityTransformer>();
+        options.AddOperationTransformer<BearerSecurityTransformer>();
+    })
     .AddPersistence()
     .AddApplication()
     .AddValidation()
     .AddIdentityServices()
-    .AddTokenIssuance();
+    .AddTokenIssuance()
+    .AddBearerAuthentication();
 
 builder.Services.AddHealthChecks();
 
@@ -46,10 +52,14 @@ if (app.Environment.IsDevelopment())
         return;
     }
     app.MapOpenApi();
-    app.MapScalarApiReference(options => options.WithTitle("N2JSoft — API de gestion des dépenses"));
+    app.MapScalarApiReference(options => options.WithTitle("N2JSoft — API de gestion des dépenses")
+                                                .AddPreferredSecuritySchemes(BearerSecurityTransformer.SchemeName));
 }
 
 app.UseHttpsRedirection();
+app.UseAuthentication();
+app.UseAuthorization();
+
 
 app.MapAuthenticationEndpoints();
 app.MapUserEndpoints();

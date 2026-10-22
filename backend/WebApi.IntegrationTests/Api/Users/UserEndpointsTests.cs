@@ -21,7 +21,7 @@ namespace WebApi.IntegrationTests.Api.Users
         public async Task GetUsers_Returns_Ok()
         {
             // Arrange
-            using var client = _factory.CreateClient();
+            using var client = await _factory.CreateSuperAdminClientAsync(TestContext.Current.CancellationToken);
 
             // Act
             using var response = await client.GetAsync("/api/users", TestContext.Current.CancellationToken);
@@ -34,7 +34,7 @@ namespace WebApi.IntegrationTests.Api.Users
         public async Task CreateUser_When_Request_Is_Valid_Returns_Created_And_Persists()
         {
             // Arrange
-            using var client = _factory.CreateClient();
+            using var client = await _factory.CreateSuperAdminClientAsync(TestContext.Current.CancellationToken);
             var cancellationToken = TestContext.Current.CancellationToken;
 
             var request = new CreateUserRequest(
@@ -86,7 +86,7 @@ namespace WebApi.IntegrationTests.Api.Users
         public async Task CreateUser_When_Request_Is_Invalid_Returns_Errors_Without_Inserting()
         {
             // Arrange
-            using var client = _factory.CreateClient();
+            using var client = await _factory.CreateSuperAdminClientAsync(TestContext.Current.CancellationToken);
             var cancellationToken = TestContext.Current.CancellationToken;
 
             using var scope = _factory.Services.CreateScope();
@@ -121,7 +121,7 @@ namespace WebApi.IntegrationTests.Api.Users
         [Fact]
         public async Task GetUser_When_User_Does_Not_Exist_Returns_NotFound()
         {
-            using var client = _factory.CreateClient();
+            using var client = await _factory.CreateSuperAdminClientAsync(TestContext.Current.CancellationToken);
             var cancellationToken = TestContext.Current.CancellationToken;
 
             using var response = await client.GetAsync($"/api/users/{Guid.NewGuid()}", cancellationToken);
@@ -137,7 +137,7 @@ namespace WebApi.IntegrationTests.Api.Users
         public async Task GetUser_When_User_Is_Deleted_Returns_NotFound()
         {
             // Arrange
-            using var client = _factory.CreateClient();
+            using var client = await _factory.CreateSuperAdminClientAsync(TestContext.Current.CancellationToken);
             var cancellationToken = TestContext.Current.CancellationToken;
 
             var request = new CreateUserRequest(
@@ -187,7 +187,7 @@ namespace WebApi.IntegrationTests.Api.Users
         public async Task GetUsers_Returns_Active_And_Inactive_Users_Without_Deleted()
         {
             // Arrange
-            using var client = _factory.CreateClient();
+            using var client = await _factory.CreateSuperAdminClientAsync(TestContext.Current.CancellationToken);
             var cancellationToken = TestContext.Current.CancellationToken;
 
             var active = CreateEntity("Actif", true, false);
@@ -241,7 +241,7 @@ namespace WebApi.IntegrationTests.Api.Users
         public async Task SetStatus_When_User_Exists_Persists_Requested_State(bool isActive)
         {
             var cancellationToken = TestContext.Current.CancellationToken;
-            using var client = _factory.CreateClient();
+            using var client = await _factory.CreateSuperAdminClientAsync(TestContext.Current.CancellationToken);
 
             using var createResponse = await client.PostAsJsonAsync("/api/users",
                 new CreateUserRequest(
@@ -291,7 +291,7 @@ namespace WebApi.IntegrationTests.Api.Users
         [Fact]
         public async Task SetStatus_When_User_Is_Missing_Returns_NotFound()
         {
-            using var client = _factory.CreateClient();
+            using var client = await _factory.CreateSuperAdminClientAsync(TestContext.Current.CancellationToken);
             var cancellationToken = TestContext.Current.CancellationToken;
 
             using var response = await client.PutAsJsonAsync(
@@ -309,7 +309,7 @@ namespace WebApi.IntegrationTests.Api.Users
         [Fact]
         public async Task SetStatus_When_Status_Is_Omitted_Returns_ValidationError()
         {
-            using var client = _factory.CreateClient();
+            using var client = await _factory.CreateSuperAdminClientAsync(TestContext.Current.CancellationToken);
             var cancellationToken = TestContext.Current.CancellationToken;
 
             using var response = await client.PutAsJsonAsync(
@@ -333,7 +333,7 @@ namespace WebApi.IntegrationTests.Api.Users
         public async Task DeleteUser_Preserves_Record_And_Hides_User(bool isActive)
         {
             var cancellationToken = TestContext.Current.CancellationToken;
-            using var client = _factory.CreateClient();
+            using var client = await _factory.CreateSuperAdminClientAsync(TestContext.Current.CancellationToken);
 
             using var createResponse = await client.PostAsJsonAsync(
                 "/api/users",
@@ -408,7 +408,7 @@ namespace WebApi.IntegrationTests.Api.Users
         [Fact]
         public async Task DeleteUser_When_User_Is_Missing_Returns_NotFound()
         {
-            using var client = _factory.CreateClient();
+            using var client = await _factory.CreateSuperAdminClientAsync(TestContext.Current.CancellationToken);
             var cancellationToken = TestContext.Current.CancellationToken;
 
             using var response = await client.DeleteAsync(

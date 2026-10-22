@@ -61,7 +61,6 @@ internal static class DependencyInjectionExtensions
         services.AddScoped<IdentitySeeder>();
         services.AddOptions<BootstrapAdminOptions>().BindConfiguration(BootstrapAdminOptions.SectionName);
 
-        services.AddAuthentication();
         services.AddScoped<IAuthenticationProvider, IdentityAuthenticationProvider>();
 
         return services;

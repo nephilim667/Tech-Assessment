@@ -27,7 +27,7 @@ namespace WebApi.UnitTests.Application.Users
             var service = new UserService(_userRepository, _unitOfWork);
 
             // Act
-            var result = await service.CreateAsync(details);
+            var result = await service.CreateAsync(details, TestContext.Current.CancellationToken);
 
             // Assert
             Assert.True(result.IsSuccess);
@@ -45,8 +45,7 @@ namespace WebApi.UnitTests.Application.Users
         [Theory]
         [InlineData(0)]
         [InlineData(-1)]
-        public async Task CreateAsync_When_Quota_Is_Invalid_Does_Not_Persist(
-            int maxExpensesPerMonth)
+        public async Task CreateAsync_When_Quota_Is_Invalid_Does_Not_Persist(int maxExpensesPerMonth)
         {
             // Arrange
             var details = new UserDetails(
@@ -60,7 +59,7 @@ namespace WebApi.UnitTests.Application.Users
             var service = new UserService(_userRepository, _unitOfWork);
 
             // Act
-            var result = await service.CreateAsync(details);
+            var result = await service.CreateAsync(details, TestContext.Current.CancellationToken);
 
             // Assert
             Assert.False(result.IsSuccess);

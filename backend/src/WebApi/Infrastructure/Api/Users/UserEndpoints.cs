@@ -1,3 +1,4 @@
+using WebApi.Infrastructure.Identity;
 using WebApi.Infrastructure.Api.Common;
 using WebApi.Infrastructure.Api.Users.Contracts;
 using WebApi.Infrastructure.Api.Users.Endpoints;
@@ -8,7 +9,7 @@ internal static class UserEndpoints
 {
     public static IEndpointRouteBuilder MapUserEndpoints(this IEndpointRouteBuilder endpoints)
     {
-        var users = endpoints.MapGroup("/api/users").WithTags("Users");
+        var users = endpoints.MapGroup("/api/users").WithTags("Users").RequireAuthorization(AuthorizationPolicies.Administrators);
 
         users.MapGet("/{id:guid}", GetUserByIdEndpoint.GetAsync);
         users.MapGet("", GetUsersEndpoint.GetAsync);
