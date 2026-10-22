@@ -1,6 +1,9 @@
-using Microsoft.EntityFrameworkCore;
 using System.Diagnostics.CodeAnalysis;
+
+using Microsoft.EntityFrameworkCore;
+
 using WebApi.Infrastructure.Api;
+using WebApi.Infrastructure.Api.Users;
 using WebApi.Infrastructure.Persistence;
 
 var builder = WebApplication.CreateBuilder(args);
