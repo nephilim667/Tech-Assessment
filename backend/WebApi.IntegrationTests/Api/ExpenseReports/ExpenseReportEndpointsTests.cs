@@ -1,5 +1,7 @@
 ﻿using System.Net;
+using System.Text.Json;
 using System.Net.Http.Json;
+using System.Net.Http.Headers;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -8,6 +10,9 @@ using WebApi.Domain.Models;
 using WebApi.Infrastructure.Persistence;
 using WebApi.Infrastructure.Persistence.Mappings;
 using WebApi.Infrastructure.Api.ExpenseReports.Contracts;
+
+using WebApi.Application.Common;
+using WebApi.Application.Interfaces.Authentication;
 
 using WebApi.IntegrationTests.Infrastructure;
 
@@ -88,9 +93,7 @@ namespace WebApi.IntegrationTests.Api.ExpenseReports
         [Theory]
         [InlineData(0, 10)]
         [InlineData(2026, 13)]
-        public async Task Create_When_Period_Is_Invalid_Returns_BadRequest(
-            int year,
-            int month)
+        public async Task Create_When_Period_Is_Invalid_Returns_BadRequest(int year, int month)
         {
             var token = TestContext.Current.CancellationToken;
             using var client = await factory.CreateSuperAdminClientAsync(token);
@@ -116,6 +119,111 @@ namespace WebApi.IntegrationTests.Api.ExpenseReports
 
             Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         }
+
+        [Fact]
+        public async Task Create_When_User_Is_Deleted_Returns_NotFound_Without_Persisting()
+        {
+            var token = TestContext.Current.CancellationToken;
+            var userId = await CreateUserAsync(isActive: true, token);
+
+            // Prépare un bénéficiaire supprimé logiquement.
+            using (var setupScope = factory.Services.CreateScope())
+            {
+                var context = setupScope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+                var user = await context.Beneficiaries.SingleAsync(entity => entity.Id == userId, token);
+
+                user.IsDeleted = true;
+                user.IsActive = false;
+
+                await context.SaveChangesAsync(token);
+            }
+
+            using var client = await factory.CreateSuperAdminClientAsync(token);
+
+            using var response = await client.PostAsJsonAsync(
+                "/api/expense-reports",
+                new CreateExpenseReportRequest(userId, 2026, 10),
+                token);
+
+            Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+
+            using var problem = JsonDocument.Parse(await response.Content.ReadAsStringAsync(token));
+
+            Assert.Equal("user.not_found", problem.RootElement.GetProperty("code").GetString());
+
+            using var verificationScope = factory.Services.CreateScope();
+            var verificationContext = verificationScope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+            Assert.False(await verificationContext.ExpenseReports.AnyAsync(report => report.UserId == userId, token));
+        }
+
+        [Fact]
+        public async Task Create_When_Authenticated_As_Admin_Returns_Created()
+        {
+            var token = TestContext.Current.CancellationToken;
+            var userId = await CreateUserAsync(isActive: true, token);
+
+            using var scope = factory.Services.CreateScope();
+            var issuer = scope.ServiceProvider.GetRequiredService<IAccessTokenIssuer>();
+
+            var accessToken = issuer.Generate(Guid.NewGuid(), [SecurityRoles.Admin]);
+
+            using var client = factory.CreateClient();
+
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken.AccessToken);
+
+            using var response = await client.PostAsJsonAsync(
+                "/api/expense-reports",
+                new CreateExpenseReportRequest(userId, 2026, 10),
+                token);
+
+            Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        }
+
+        [Fact]
+        public async Task Create_When_Token_Has_No_Allowed_Role_Returns_Forbidden()
+        {
+            var token = TestContext.Current.CancellationToken;
+
+            using var scope = factory.Services.CreateScope();
+            var issuer = scope.ServiceProvider.GetRequiredService<IAccessTokenIssuer>();
+
+            var accessToken = issuer.Generate(Guid.NewGuid(), []);
+
+            using var client = factory.CreateClient();
+
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken.AccessToken);
+
+            using var response = await client.PostAsJsonAsync(
+                "/api/expense-reports",
+                new CreateExpenseReportRequest(Guid.NewGuid(), 2026, 10),
+                token);
+
+            Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        }
+
+        [Fact]
+        public async Task Create_When_UserId_Is_Empty_Returns_ValidationError()
+        {
+            var token = TestContext.Current.CancellationToken;
+            using var client = await factory.CreateSuperAdminClientAsync(token);
+
+            using var response = await client.PostAsJsonAsync(
+                "/api/expense-reports",
+                new CreateExpenseReportRequest(Guid.Empty, 2026, 10),
+                token);
+
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+            using var problem = JsonDocument.Parse(await response.Content.ReadAsStringAsync(token));
+
+            var errors = problem.RootElement.GetProperty("errors");
+
+            Assert.True(errors.TryGetProperty("UserId", out var userErrors));
+            Assert.True(userErrors.GetArrayLength() > 0);
+        }
+
 
         private async Task<Guid> CreateUserAsync(bool isActive, CancellationToken cancellationToken)
         {
