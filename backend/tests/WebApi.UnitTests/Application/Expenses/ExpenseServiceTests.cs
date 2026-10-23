@@ -351,6 +351,234 @@ namespace WebApi.UnitTests.Application.Expenses
             await AssertNoWriteAsync();
         }
 
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public async Task UpdateAsync_Within_Same_Report_Allows_Active_Or_Inactive_User(bool isActive)
+        {
+            var token = TestContext.Current.CancellationToken;
+            var (user, source, expense) = PrepareExpenseForUpdate(token);
+
+            if (!isActive)
+                user.Deactivate();
+
+            var details = CreateDetails() with { Amount = 42m };
+            var result = await CreateService().UpdateAsync(source.Id, expense.Id, source.Id, details, token);
+
+            Assert.True(result.IsSuccess);
+            Assert.Equal(42m, result.Value.Amount);
+
+            await _users.Received(1).GetByIdForUpdateAsync(user.Id, token);
+
+            await _unitOfWork.Received(1).ExecuteInTransactionAsync(
+                Arg.Any<Func<CancellationToken, Task<Result<Expense>>>>(),
+                token);
+
+            await AssertNoQuotaCountAsync();
+            await _expenses.Received(1).UpdateAsync(expense, token);
+            await _unitOfWork.Received(1).SaveChangesAsync(token);
+        }
+
+        [Fact]
+        public async Task UpdateAsync_To_Another_Report_In_Same_Month_Does_Not_Check_Quota()
+        {
+            var token = TestContext.Current.CancellationToken;
+            var (_, source, expense) = PrepareExpenseForUpdate(token);
+
+            var destination = PrepareDestination(source, token, month: source.Month);
+            var result = await CreateService().UpdateAsync(source.Id, expense.Id, destination.Id, CreateDetails(), token);
+
+            Assert.True(result.IsSuccess);
+            Assert.Equal(destination.Id, result.Value.ExpenseReportId);
+
+            await AssertNoQuotaCountAsync();
+            await _expenses.Received(1).UpdateAsync(expense, token);
+            await _unitOfWork.Received(1).SaveChangesAsync(token);
+        }
+
+        [Fact]
+        public async Task UpdateAsync_To_Another_Month_Checks_Destination_Quota()
+        {
+            var token = TestContext.Current.CancellationToken;
+            var (user, source, expense) = PrepareExpenseForUpdate(token);
+            var destination = PrepareDestination(source, token);
+
+            _expenses.CountByUserAndMonthAsync(user.Id, destination.Year, destination.Month, token).Returns(Task.FromResult(4));
+
+            var details = CreateDetails() with
+            {
+                Date = new DateOnly(destination.Year, destination.Month, 5)
+            };
+
+            var result = await CreateService().UpdateAsync(source.Id, expense.Id, destination.Id, details, token);
+
+            Assert.True(result.IsSuccess);
+            Assert.Equal(destination.Id, result.Value.ExpenseReportId);
+            Assert.Equal(details.Date, result.Value.Date);
+
+            await _expenses.Received(1).CountByUserAndMonthAsync(user.Id, destination.Year, destination.Month, token);
+            await _expenses.Received(1).UpdateAsync(expense, token);
+            await _unitOfWork.Received(1).SaveChangesAsync(token);
+        }
+
+        [Theory]
+        [InlineData(5)]
+        [InlineData(6)]
+        public async Task UpdateAsync_When_Destination_Quota_Is_Reached_Does_Not_Change_Expense(int count)
+        {
+            var token = TestContext.Current.CancellationToken;
+            var (user, source, expense) = PrepareExpenseForUpdate(token);
+            var destination = PrepareDestination(source, token);
+            var originalDate = expense.Date;
+
+            _expenses.CountByUserAndMonthAsync(user.Id, destination.Year, destination.Month, token).Returns(Task.FromResult(count));
+
+            var details = CreateDetails() with
+            {
+                Date = new DateOnly(destination.Year, destination.Month, 5)
+            };
+
+            var result = await CreateService().UpdateAsync(source.Id, expense.Id, destination.Id, details, token);
+
+            Assert.False(result.IsSuccess);
+            Assert.Equal("expense.monthly_quota_reached", result.Error.Code);
+            Assert.Equal(source.Id, expense.ExpenseReportId);
+            Assert.Equal(originalDate, expense.Date);
+
+            await AssertNoWriteAsync();
+        }
+
+        [Fact]
+        public async Task UpdateAsync_When_Destination_Belongs_To_Another_User_Does_Not_Write()
+        {
+            var token = TestContext.Current.CancellationToken;
+            var (_, source, expense) = PrepareExpenseForUpdate(token);
+
+            var destination = PrepareDestination(source, token, userId: Guid.NewGuid());
+            var result = await CreateService().UpdateAsync(source.Id, expense.Id, destination.Id, CreateDetails(), token);
+
+            Assert.False(result.IsSuccess);
+            Assert.Equal("expense.destination_user_mismatch", result.Error.Code);
+            Assert.Equal(source.Id, expense.ExpenseReportId);
+
+            await AssertNoQuotaCountAsync();
+            await AssertNoWriteAsync();
+        }
+
+        [Fact]
+        public async Task UpdateAsync_When_Inactive_User_Is_Transferred_Does_Not_Write()
+        {
+            var token = TestContext.Current.CancellationToken;
+            var (user, source, expense) = PrepareExpenseForUpdate(token);
+            user.Deactivate();
+
+            // Même mois : cela reste un transfert entre deux notes.
+            var destination = PrepareDestination(source, token, month: source.Month);
+            var result = await CreateService().UpdateAsync(source.Id, expense.Id, destination.Id, CreateDetails(), token);
+
+            Assert.False(result.IsSuccess);
+            Assert.Equal("user.inactive", result.Error.Code);
+            Assert.Equal(source.Id, expense.ExpenseReportId);
+
+            await AssertNoWriteAsync();
+        }
+
+        [Fact]
+        public async Task UpdateAsync_When_Destination_Is_Missing_Does_Not_Write()
+        {
+            var token = TestContext.Current.CancellationToken;
+            var (_, source, expense) = PrepareExpenseForUpdate(token);
+            var destinationId = Guid.NewGuid();
+
+            _reports.GetByIdAsync(destinationId, token).Returns(Task.FromResult<ExpenseReport?>(null));
+
+            var result = await CreateService().UpdateAsync(source.Id, expense.Id, destinationId, CreateDetails(), token);
+
+            Assert.False(result.IsSuccess);
+            Assert.Equal("expense_report.not_found", result.Error.Code);
+
+            await AssertNoWriteAsync();
+        }
+
+        [Fact]
+        public async Task UpdateAsync_When_Expense_Is_Missing_Does_Not_Write()
+        {
+            var token = TestContext.Current.CancellationToken;
+            var (_, source) = PrepareUserAndReport(token);
+            var expenseId = Guid.NewGuid();
+
+            _expenses.GetByIdAsync(expenseId, token).Returns(Task.FromResult<Expense?>(null));
+
+            var result = await CreateService().UpdateAsync(source.Id, expenseId, source.Id, CreateDetails(), token);
+
+            Assert.False(result.IsSuccess);
+            Assert.Equal("expense.not_found", result.Error.Code);
+
+            await AssertNoWriteAsync();
+        }
+
+        [Fact]
+        public async Task UpdateAsync_When_Expense_Does_Not_Belong_To_Source_Does_Not_Write()
+        {
+            var token = TestContext.Current.CancellationToken;
+            var (_, source, expense) = PrepareExpenseForUpdate(token);
+
+            var otherSource = PrepareDestination(source, token, month: source.Month);
+            var result = await CreateService().UpdateAsync(otherSource.Id, expense.Id, source.Id, CreateDetails(), token);
+
+            Assert.False(result.IsSuccess);
+            Assert.Equal("expense.not_found", result.Error.Code);
+
+            await AssertNoWriteAsync();
+        }
+
+        [Fact]
+        public async Task UpdateAsync_When_Source_Is_Missing_Does_Not_Write()
+        {
+            var token = TestContext.Current.CancellationToken;
+            var sourceId = Guid.NewGuid();
+
+            _reports.GetByIdAsync(sourceId, token).Returns(Task.FromResult<ExpenseReport?>(null));
+            var result = await CreateService().UpdateAsync(sourceId, Guid.NewGuid(), sourceId, CreateDetails(), token);
+
+            Assert.False(result.IsSuccess);
+            Assert.Equal("expense_report.not_found", result.Error.Code);
+
+            await AssertNoWriteAsync();
+        }
+
+        [Fact]
+        public async Task UpdateAsync_When_User_Disappears_Before_Lock_Does_Not_Write()
+        {
+            var token = TestContext.Current.CancellationToken;
+            var (user, source, expense) = PrepareExpenseForUpdate(token);
+
+            _users.GetByIdForUpdateAsync(user.Id, token).Returns(Task.FromResult<User?>(null));
+            var result = await CreateService().UpdateAsync(source.Id, expense.Id, source.Id, CreateDetails(), token);
+
+            Assert.False(result.IsSuccess);
+            Assert.Equal("user.not_found", result.Error.Code);
+
+            await AssertNoWriteAsync();
+        }
+
+        [Fact]
+        public async Task UpdateAsync_When_Details_Are_Invalid_Does_Not_Write()
+        {
+            var token = TestContext.Current.CancellationToken;
+            var (_, source, expense) = PrepareExpenseForUpdate(token);
+            var originalAmount = expense.Amount;
+
+            var details = CreateDetails() with { Amount = 0m };
+            var result = await CreateService().UpdateAsync(source.Id, expense.Id, source.Id, details, token);
+
+            Assert.False(result.IsSuccess);
+            Assert.Equal("expense.invalid_amount", result.Error.Code);
+            Assert.Equal(originalAmount, expense.Amount);
+
+            await AssertNoWriteAsync();
+        }
+
 
         // Helpers
         private (User User, ExpenseReport Report) PrepareUserAndReport(CancellationToken token)
@@ -386,6 +614,10 @@ namespace WebApi.UnitTests.Application.Expenses
 
             await _unitOfWork.DidNotReceive().SaveChangesAsync(
                 Arg.Any<CancellationToken>());
+
+            await _expenses.DidNotReceive().UpdateAsync(
+                Arg.Any<Expense>(),
+                Arg.Any<CancellationToken>());
         }
 
         private ExpenseService CreateService() => new(_users, _reports, _expenses, _unitOfWork);
@@ -398,5 +630,37 @@ namespace WebApi.UnitTests.Application.Expenses
                 BillingStreet: "20 rue du Restaurant",
                 BillingPostalCode: "69001",
                 BillingCity: "Lyon");
+
+        private (User User, ExpenseReport Source, Expense Expense) PrepareExpenseForUpdate(CancellationToken token)
+        {
+            var (user, report) = PrepareUserAndReport(token);
+            var expense = Expense.Create(report, CreateDetails()).Value;
+
+            _expenses.GetByIdAsync(expense.Id, token).Returns(Task.FromResult<Expense?>(expense));
+            return (user, report, expense);
+        }
+
+        private ExpenseReport PrepareDestination(ExpenseReport source, CancellationToken token, int month = 11, Guid? userId = null)
+        {
+            var destination = ExpenseReport.Restore(
+                Guid.NewGuid(),
+                userId ?? source.UserId,
+                "Note de destination",
+                source.Year,
+                month);
+
+            _reports.GetByIdAsync(destination.Id, token).Returns(Task.FromResult<ExpenseReport?>(destination));
+
+            return destination;
+        }
+
+        private async Task AssertNoQuotaCountAsync()
+        {
+            await _expenses.DidNotReceive().CountByUserAndMonthAsync(
+                Arg.Any<Guid>(),
+                Arg.Any<int>(),
+                Arg.Any<int>(),
+                Arg.Any<CancellationToken>());
+        }
     }
 }

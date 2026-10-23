@@ -13,5 +13,14 @@ namespace WebApi.Infrastructure.Api.Expenses.Mappings
                 BillingPostalCode: request.BillingPostalCode,
                 BillingCity: request.BillingCity,
                 BillingBrand: request.BillingBrand);
+
+        public static ExpenseDetails ToDetails(this UpdateExpenseRequest request) =>
+            new(Date: request.Date!.Value,
+                Description: request.Description,
+                Amount: request.Amount,
+                BillingStreet: request.BillingStreet,
+                BillingPostalCode: request.BillingPostalCode,
+                BillingCity: request.BillingCity,
+                BillingBrand: request.BillingBrand);
     }
 }

@@ -106,5 +106,59 @@ namespace WebApi.Application.Expenses
                 },
                 cancellationToken);
         }
+
+        public Task<Result<Expense>> UpdateAsync(Guid sourceExpenseReportId, Guid expenseId, Guid destinationExpenseReportId, ExpenseDetails details, CancellationToken cancellationToken = default)
+        {
+            return unitOfWork.ExecuteInTransactionAsync(
+                async token =>
+                {
+                    var source = await reports.GetByIdAsync(
+                        sourceExpenseReportId,
+                        token);
+
+                    if (source is null)
+                        return Result<Expense>.Failure(ExpenseReportErrors.NotFound);
+
+                    var user = await users.GetByIdForUpdateAsync(source.UserId, token);
+
+                    if (user is null)
+                        return Result<Expense>.Failure(UserErrors.NotFound);
+
+                    // Relit la dépense après acquisition du verrou.
+                    var expense = await expenses.GetByIdAsync(expenseId, token);
+                    if (expense is null || expense.ExpenseReportId != sourceExpenseReportId)
+                        return Result<Expense>.Failure(ExpenseErrors.NotFound);
+
+                    bool isTransfer = destinationExpenseReportId != sourceExpenseReportId;
+                    if (isTransfer && !user.IsActive)
+                        return Result<Expense>.Failure(UserErrors.Inactive);
+
+                    var destination = isTransfer ? await reports.GetByIdAsync(destinationExpenseReportId, token) : source;
+                    if (destination is null)
+                        return Result<Expense>.Failure(ExpenseReportErrors.NotFound);
+
+                    if (destination.UserId != source.UserId)
+                        return Result<Expense>.Failure(ExpenseErrors.DestinationUserMismatch);
+
+                    var changesPeriod = destination.Year != source.Year || destination.Month != source.Month;
+                    if (changesPeriod)
+                    {
+                        var count = await expenses.CountByUserAndMonthAsync(user.Id, destination.Year, destination.Month, token);
+
+                        if (count >= user.MaxExpensesPerMonth)
+                            return Result<Expense>.Failure(ExpenseErrors.MonthlyQuotaReached);
+                    }
+
+                    var result = expense.Update(destination, details);
+                    if (!result.IsSuccess)
+                        return result;
+
+                    await expenses.UpdateAsync(expense, token);
+                    await unitOfWork.SaveChangesAsync(token);
+
+                    return result;
+                },
+                cancellationToken);
+        }
     }
 }

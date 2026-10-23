@@ -30,5 +30,8 @@ namespace WebApi.Domain.Errors
 
         public static readonly Error NotFound =
             new("expense.not_found", "La dépense demandée est introuvable.");
+
+        public static readonly Error DestinationUserMismatch =
+            new("expense.destination_user_mismatch", "La note de destination doit appartenir au même utilisateur.");
     }
 }

@@ -634,6 +634,447 @@ namespace WebApi.IntegrationTests.Api.Expenses
             Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         }
 
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public async Task Update_Within_Same_Report_Allows_Active_Or_Inactive_User(bool isActive)
+        {
+            var token = TestContext.Current.CancellationToken;
+            var report = (await PrepareReportsAsync(token, quota: 1))[0];
+
+            using var client = await factory.CreateSuperAdminClientAsync(token);
+            var expense = await CreateExpenseAsync(client, report.Id, token);
+
+            if (!isActive)
+                await SetUserInactiveAsync(report.UserId, isDeleted: false, token);
+
+            var request = CreateUpdateRequest(report.Id) with
+            {
+                Description = "Parking",
+                Amount = 42m
+            };
+
+            using var response = await client.PutAsJsonAsync($"{GetUrl(report.Id)}/{expense.Id}", request, token);
+
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+            var updated = await response.Content.ReadFromJsonAsync<ExpenseResponse>(token);
+
+            Assert.NotNull(updated);
+            Assert.Equal(expense.Id, updated.Id);
+            Assert.Equal(report.Id, updated.ExpenseReportId);
+            Assert.Equal("Parking", updated.Description);
+            Assert.Equal(42m, updated.Amount);
+
+            using var scope = factory.Services.CreateScope();
+            var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+            var persisted = await context.Expenses
+                .AsNoTracking()
+                .SingleAsync(entity => entity.Id == expense.Id, token);
+
+            Assert.Equal("Parking", persisted.Description);
+            Assert.Equal(42m, persisted.Amount);
+
+            Assert.Equal(1,
+                await context.Expenses.CountAsync(
+                    entity => entity.ExpenseReportId == report.Id && !entity.IsDeleted,
+                    token));
+        }
+
+        [Theory]
+        [InlineData(2026, 11)]
+        [InlineData(2027, 10)]
+        public async Task Update_To_Another_Period_Moves_Expense_And_Frees_Source_Quota(int year,int month)
+        {
+            var token = TestContext.Current.CancellationToken;
+            var source = (await PrepareReportsAsync(token, quota: 1))[0];
+            var destination = await CreateDestinationAsync(source, year, month, token);
+
+            using var client = await factory.CreateSuperAdminClientAsync(token);
+            var expense = await CreateExpenseAsync(client, source.Id, token);
+
+            var request = CreateUpdateRequest(destination.Id) with
+            {
+                Date = new DateOnly(year, month, 5)
+            };
+
+            using var response = await client.PutAsJsonAsync($"{GetUrl(source.Id)}/{expense.Id}", request, token);
+
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+            var updated = await response.Content.ReadFromJsonAsync<ExpenseResponse>(token);
+
+            Assert.NotNull(updated);
+            Assert.Equal(expense.Id, updated.Id);
+            Assert.Equal(destination.Id, updated.ExpenseReportId);
+            Assert.Equal(request.Date!.Value, updated.Date);
+
+            using (var scope = factory.Services.CreateScope())
+            {
+                var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+                var persisted = await context.Expenses.AsNoTracking().SingleAsync(entity => entity.Id == expense.Id, token);
+
+                Assert.Equal(destination.Id, persisted.ExpenseReportId);
+                Assert.Equal(request.Date!.Value, persisted.Date);
+
+                Assert.Equal(0,
+                    await context.Expenses.CountAsync(
+                        entity => entity.ExpenseReportId == source.Id && !entity.IsDeleted,
+                        token));
+
+                Assert.Equal(1,
+                    await context.Expenses.CountAsync(
+                        entity => entity.ExpenseReportId == destination.Id && !entity.IsDeleted,
+                        token));
+            }
+
+            // Le transfert a libéré la place dans le mois source.
+            var replacement = await CreateExpenseAsync(client, source.Id, token);
+            Assert.NotEqual(expense.Id, replacement.Id);
+        }
+
+        [Fact]
+        public async Task Update_When_Destination_Quota_Is_Reached_Leaves_Expense_Unchanged()
+        {
+            var token = TestContext.Current.CancellationToken;
+            var source = (await PrepareReportsAsync(token, quota: 1))[0];
+            var destination = await CreateDestinationAsync(source, 2026, 11, token);
+
+            using var client = await factory.CreateSuperAdminClientAsync(token);
+            var expense = await CreateExpenseAsync(client, source.Id, token);
+
+            using var occupation = await client.PostAsJsonAsync(
+                GetUrl(destination.Id),
+                CreateRequest() with { Date = new DateOnly(2026, 11, 15) },
+                token);
+
+            Assert.Equal(HttpStatusCode.Created, occupation.StatusCode);
+
+            var request = CreateUpdateRequest(destination.Id) with
+            {
+                Date = new DateOnly(2026, 11, 5)
+            };
+
+            using var response = await client.PutAsJsonAsync($"{GetUrl(source.Id)}/{expense.Id}", request, token);
+
+            await AssertProblemAsync(
+                response,
+                HttpStatusCode.Conflict,
+                "expense.monthly_quota_reached",
+                token);
+
+            await AssertExpenseUnchangedAsync(expense, token);
+        }
+
+        [Fact]
+        public async Task Update_To_Another_Report_In_Same_Month_Allows_Full_Quota()
+        {
+            var token = TestContext.Current.CancellationToken;
+            var reports = await PrepareReportsAsync(
+                token, quota: 1, reportCount: 2);
+
+            using var client = await factory.CreateSuperAdminClientAsync(token);
+            var expense = await CreateExpenseAsync(client, reports[0].Id, token);
+
+            using var response = await client.PutAsJsonAsync(
+                $"{GetUrl(reports[0].Id)}/{expense.Id}",
+                CreateUpdateRequest(reports[1].Id),
+                token);
+
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+            using var scope = factory.Services.CreateScope();
+            var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+            var persisted = await context.Expenses
+                .AsNoTracking()
+                .SingleAsync(entity => entity.Id == expense.Id, token);
+
+            Assert.Equal(reports[1].Id, persisted.ExpenseReportId);
+        }
+
+        [Fact]
+        public async Task Update_When_Destination_Belongs_To_Another_User_Returns_BadRequest()
+        {
+            var token = TestContext.Current.CancellationToken;
+            var source = (await PrepareReportsAsync(token))[0];
+            var destination = (await PrepareReportsAsync(token))[0];
+
+            using var client = await factory.CreateSuperAdminClientAsync(token);
+            var expense = await CreateExpenseAsync(client, source.Id, token);
+
+            using var response = await client.PutAsJsonAsync($"{GetUrl(source.Id)}/{expense.Id}", CreateUpdateRequest(destination.Id), token);
+
+            await AssertProblemAsync(response, HttpStatusCode.BadRequest, "expense.destination_user_mismatch", token);
+            await AssertExpenseUnchangedAsync(expense, token);
+        }
+
+        [Fact]
+        public async Task Update_When_Destination_Does_Not_Exist_Returns_NotFound()
+        {
+            var token = TestContext.Current.CancellationToken;
+            var source = (await PrepareReportsAsync(token))[0];
+
+            using var client = await factory.CreateSuperAdminClientAsync(token);
+            var expense = await CreateExpenseAsync(client, source.Id, token);
+
+            using var response = await client.PutAsJsonAsync($"{GetUrl(source.Id)}/{expense.Id}", CreateUpdateRequest(Guid.NewGuid()), token);
+
+            await AssertProblemAsync(response, HttpStatusCode.NotFound, "expense_report.not_found", token);
+            await AssertExpenseUnchangedAsync(expense, token);
+        }
+
+        [Theory]
+        [InlineData("inactive_transfer", HttpStatusCode.Conflict, "user.inactive")]
+        [InlineData("deleted_user", HttpStatusCode.NotFound, "expense_report.not_found")]
+        [InlineData("deleted_expense", HttpStatusCode.NotFound, "expense.not_found")]
+        public async Task Update_Applies_User_And_Expense_State_Restrictions(string state, HttpStatusCode expectedStatus, string expectedCode)
+        {
+            var token = TestContext.Current.CancellationToken;
+            var reports = await PrepareReportsAsync(token, reportCount: 2);
+            var source = reports[0];
+
+            using var client = await factory.CreateSuperAdminClientAsync(token);
+            var expense = await CreateExpenseAsync(client, source.Id, token);
+
+            if (state == "deleted_expense")
+            {
+                using var deletion = await client.DeleteAsync(
+                    $"{GetUrl(source.Id)}/{expense.Id}", token);
+
+                Assert.Equal(HttpStatusCode.NoContent, deletion.StatusCode);
+            }
+            else
+            {
+                await SetUserInactiveAsync(source.UserId, isDeleted: state == "deleted_user", token);
+            }
+
+            var destinationId = state == "inactive_transfer" ? reports[1].Id : source.Id;
+
+            using var response = await client.PutAsJsonAsync($"{GetUrl(source.Id)}/{expense.Id}", CreateUpdateRequest(destinationId) with { Amount = 99m }, token);
+
+            await AssertProblemAsync(response, expectedStatus, expectedCode, token);
+            await AssertExpenseUnchangedAsync(expense, token, isDeleted: state == "deleted_expense");
+        }
+
+        [Theory]
+        [InlineData("missing_source", "expense_report.not_found")]
+        [InlineData("missing_expense", "expense.not_found")]
+        [InlineData("wrong_source", "expense.not_found")]
+        public async Task Update_When_Source_Or_Expense_Is_Invalid_Returns_NotFound(string failure, string expectedCode)
+        {
+            var token = TestContext.Current.CancellationToken;
+            var reports = await PrepareReportsAsync(token, reportCount: 2);
+
+            using var client = await factory.CreateSuperAdminClientAsync(token);
+            var expense = await CreateExpenseAsync(client, reports[0].Id, token);
+
+            var sourceId = failure switch
+            {
+                "missing_source" => Guid.NewGuid(),
+                "wrong_source" => reports[1].Id,
+                _ => reports[0].Id
+            };
+
+            var expenseId = failure == "missing_expense" ? Guid.NewGuid() : expense.Id;
+
+            using var response = await client.PutAsJsonAsync($"{GetUrl(sourceId)}/{expenseId}", CreateUpdateRequest(reports[0].Id), token);
+
+            await AssertProblemAsync(response, HttpStatusCode.NotFound, expectedCode, token);
+            await AssertExpenseUnchangedAsync(expense, token);
+        }
+
+        [Theory]
+        [InlineData("date", "Date")]
+        [InlineData("destination", "DestinationExpenseReportId")]
+        public async Task Update_When_Request_Is_Invalid_Returns_ValidationError(string failure, string expectedField)
+        {
+            var token = TestContext.Current.CancellationToken;
+            using var client = await factory.CreateSuperAdminClientAsync(token);
+
+            var request = CreateUpdateRequest(Guid.NewGuid());
+
+            request = failure == "date"
+                ? request with { Date = null }
+                : request with { DestinationExpenseReportId = Guid.Empty };
+
+            using var response = await client.PutAsJsonAsync($"{GetUrl(Guid.NewGuid())}/{Guid.NewGuid()}", request, token);
+
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+            using var problem = JsonDocument.Parse(
+                await response.Content.ReadAsStringAsync(token));
+
+            Assert.True(problem.RootElement.GetProperty("errors").TryGetProperty(expectedField, out _));
+        }
+
+        [Theory]
+        [InlineData("Admin", HttpStatusCode.OK)]
+        [InlineData("SuperAdmin", HttpStatusCode.OK)]
+        [InlineData("", HttpStatusCode.Forbidden)]
+        public async Task Update_Applies_Role_Authorization(string role, HttpStatusCode expectedStatus)
+        {
+            var token = TestContext.Current.CancellationToken;
+            var report = (await PrepareReportsAsync(token))[0];
+
+            using var setupClient = await factory.CreateSuperAdminClientAsync(token);
+            var expense = await CreateExpenseAsync(setupClient, report.Id, token);
+
+            using var scope = factory.Services.CreateScope();
+            var issuer = scope.ServiceProvider.GetRequiredService<IAccessTokenIssuer>();
+
+            string[] roles = string.IsNullOrEmpty(role) ? [] : [role];
+            var accessToken = issuer.Generate(Guid.NewGuid(), roles);
+
+            using var client = factory.CreateClient();
+
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken.AccessToken);
+
+            using var response = await client.PutAsJsonAsync(
+                $"{GetUrl(report.Id)}/{expense.Id}",
+                CreateUpdateRequest(report.Id) with { Amount = 42m },
+                token);
+
+            Assert.Equal(expectedStatus, response.StatusCode);
+
+            if (expectedStatus == HttpStatusCode.Forbidden)
+                await AssertExpenseUnchangedAsync(expense, token);
+        }
+
+        [Fact]
+        public async Task Update_When_Anonymous_Returns_Unauthorized()
+        {
+            var token = TestContext.Current.CancellationToken;
+            using var client = factory.CreateClient();
+            using var response = await client.PutAsJsonAsync($"{GetUrl(Guid.NewGuid())}/{Guid.NewGuid()}", CreateUpdateRequest(Guid.NewGuid()), token);
+
+            Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        }
+
+        // Ce test complexe accepte les deux ordres d’exécution : la création ou le transfert.
+        // l'un des deux peut gagner, mais jamais les deux.
+        // Il vérifie également qu’un transfert refusé conserve sa dépense source.
+        // Le but est de verifié la concurrence creation/transfert
+        [Fact]
+        public async Task Create_And_Transfer_Competing_For_Last_Slot_Allow_Only_One()
+        {
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+
+            timeout.CancelAfter(TimeSpan.FromSeconds(30));
+            var token = timeout.Token;
+
+            var source = (await PrepareReportsAsync(token, quota: 1))[0];
+
+            var creationDestination = await CreateDestinationAsync(source, 2026, 11, token);
+            var transferDestination = await CreateDestinationAsync(source, 2026, 11, token);
+
+            using var client = await factory.CreateSuperAdminClientAsync(token);
+            var original = await CreateExpenseAsync(client, source.Id, token);
+
+            using var blockingScope = factory.Services.CreateScope();
+            var blockingContext = blockingScope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+            var users = blockingScope.ServiceProvider.GetRequiredService<IUserRepository>();
+
+            await using var blockingTransaction = await blockingContext.Database.BeginTransactionAsync(token);
+
+            var user = await users.GetByIdForUpdateAsync(source.UserId, token);
+            Assert.NotNull(user);
+
+            var creationRequest = CreateRequest() with
+            {
+                Date = new DateOnly(2026, 11, 15),
+                Amount = 99m
+            };
+
+            var transferRequest = CreateUpdateRequest(transferDestination.Id) with
+            {
+                Date = new DateOnly(2026, 11, 5),
+                Amount = 42m
+            };
+
+            var requests = new[]
+            {
+                client.PostAsJsonAsync(GetUrl(creationDestination.Id), creationRequest, token),
+                client.PutAsJsonAsync($"{GetUrl(source.Id)}/{original.Id}", transferRequest, token)
+            };
+
+            try
+            {
+                try
+                {
+                    await WaitForBlockedUserLocksAsync(
+                        blockingContext.Database.GetConnectionString()!,
+                        expectedCount: 2,
+                        token);
+                }
+                finally
+                {
+                    await blockingTransaction.RollbackAsync(CancellationToken.None);
+                }
+
+                var responses = await Task.WhenAll(requests);
+                var creation = responses[0];
+                var transfer = responses[1];
+
+                Assert.Contains(creation.StatusCode, new[] { HttpStatusCode.Created, HttpStatusCode.Conflict });
+                Assert.Contains(transfer.StatusCode, new[] { HttpStatusCode.OK, HttpStatusCode.Conflict });
+                Assert.Single(responses, response => response.IsSuccessStatusCode);
+
+                var conflict = Assert.Single(responses, response => response.StatusCode == HttpStatusCode.Conflict);
+
+                await AssertProblemAsync(conflict, HttpStatusCode.Conflict, "expense.monthly_quota_reached", token);
+
+                using var verificationScope = factory.Services.CreateScope();
+                var context = verificationScope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+                var destinationIds = new[]
+                {
+                    creationDestination.Id,
+                    transferDestination.Id
+                };
+
+                Assert.Equal(1,
+                    await context.Expenses.CountAsync(
+                        expense => destinationIds.Contains(expense.ExpenseReportId) && !expense.IsDeleted, token));
+
+                var persistedOriginal = await context.Expenses
+                    .AsNoTracking()
+                    .SingleAsync(expense => expense.Id == original.Id, token);
+
+                if (transfer.StatusCode == HttpStatusCode.OK)
+                {
+                    Assert.Equal(transferDestination.Id, persistedOriginal.ExpenseReportId);
+                    Assert.Equal(transferRequest.Date!.Value,persistedOriginal.Date);
+                    Assert.Equal(42m, persistedOriginal.Amount);
+                    Assert.False(await context.Expenses.AnyAsync(
+                        expense => expense.ExpenseReportId == source.Id && !expense.IsDeleted, token));
+                }
+                else
+                {
+                    // Le transfert refusé conserve intégralement la dépense source.
+                    await AssertExpenseUnchangedAsync(original, token);
+                }
+            }
+            finally
+            {
+                await timeout.CancelAsync();
+
+                foreach (var request in requests)
+                {
+                    try
+                    {
+                        using var response = await request;
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        // Annulation attendue lors du nettoyage.
+                    }
+                }
+            }
+        }
 
         // Helpers
         private async Task<ExpenseReport[]> PrepareReportsAsync(CancellationToken token, int quota = 5, string state = "active", int reportCount = 1)
@@ -729,6 +1170,83 @@ namespace WebApi.IntegrationTests.Api.Expenses
             Assert.NotNull(expense);
 
             return expense;
+        }
+
+        private static UpdateExpenseRequest CreateUpdateRequest(Guid destinationId)
+        {
+            var request = CreateRequest();
+
+            return new UpdateExpenseRequest
+            {
+                DestinationExpenseReportId = destinationId,
+                Date = request.Date,
+                Description = request.Description,
+                Amount = request.Amount,
+                BillingStreet = request.BillingStreet,
+                BillingPostalCode = request.BillingPostalCode,
+                BillingCity = request.BillingCity,
+                BillingBrand = request.BillingBrand
+            };
+        }
+
+        private async Task<ExpenseReport> CreateDestinationAsync(ExpenseReport source, int year, int month, CancellationToken token)
+        {
+            var destination = ExpenseReport.Restore(
+                Guid.NewGuid(),
+                source.UserId,
+                "Note de destination",
+                year,
+                month);
+
+            using var scope = factory.Services.CreateScope();
+            var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+            context.ExpenseReports.Add(destination.ToEntity());
+            await context.SaveChangesAsync(token);
+
+            return destination;
+        }
+
+        private async Task SetUserInactiveAsync(Guid userId, bool isDeleted, CancellationToken token)
+        {
+            using var scope = factory.Services.CreateScope();
+            var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+            var user = await context.Beneficiaries.SingleAsync(entity => entity.Id == userId, token);
+
+            user.IsActive = false;
+            user.IsDeleted = isDeleted;
+
+            await context.SaveChangesAsync(token);
+        }
+
+        private async Task AssertExpenseUnchangedAsync(ExpenseResponse original, CancellationToken token, bool isDeleted = false)
+        {
+            using var scope = factory.Services.CreateScope();
+            var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+            var persisted = await context.Expenses
+                .AsNoTracking()
+                .SingleAsync(entity => entity.Id == original.Id, token);
+
+            Assert.Equal(original.ExpenseReportId, persisted.ExpenseReportId);
+            Assert.Equal(original.Date, persisted.Date);
+            Assert.Equal(original.Description, persisted.Description);
+            Assert.Equal(original.Amount, persisted.Amount);
+            Assert.Equal(original.BillingStreet, persisted.BillingStreet);
+            Assert.Equal(original.BillingPostalCode, persisted.BillingPostalCode);
+            Assert.Equal(original.BillingCity, persisted.BillingCity);
+            Assert.Equal(original.BillingBrand, persisted.BillingBrand);
+            Assert.Equal(isDeleted, persisted.IsDeleted);
+        }
+
+        private static async Task AssertProblemAsync(HttpResponseMessage response, HttpStatusCode expectedStatus, string expectedCode, CancellationToken token)
+        {
+            Assert.Equal(expectedStatus, response.StatusCode);
+
+            using var problem = JsonDocument.Parse(await response.Content.ReadAsStringAsync(token));
+
+            Assert.Equal(expectedCode, problem.RootElement.GetProperty("code").GetString());
         }
     }
 }

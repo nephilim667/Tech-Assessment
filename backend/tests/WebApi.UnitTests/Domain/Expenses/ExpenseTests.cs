@@ -187,6 +187,141 @@ namespace WebApi.UnitTests.Domain.Expenses
             Assert.True(expense.IsDeleted);
         }
 
+        [Fact]
+        public void Update_Within_Same_Report_Changes_Data_And_Preserves_Identity()
+        {
+            var report = CreateReport();
+            var expense = Expense.Create(report, CreateDetails()).Value;
+            var originalId = expense.Id;
+
+            var details = CreateDetails() with
+            {
+                Date = new DateOnly(2026, 10, 20),
+                Description = "Parking",
+                Amount = 12.80m,
+                BillingStreet = "5 rue du Parking",
+                BillingPostalCode = "75002",
+                BillingCity = "Paris",
+                BillingBrand = null
+            };
+
+            var result = expense.Update(report, details);
+
+            Assert.True(result.IsSuccess);
+            Assert.Equal(originalId, expense.Id);
+            Assert.Equal(report.Id, expense.ExpenseReportId);
+            Assert.Equal(details.Date, expense.Date);
+            Assert.Equal(details.Description, expense.Description);
+            Assert.Equal(details.Amount, expense.Amount);
+            Assert.Equal(details.BillingStreet, expense.BillingStreet);
+            Assert.Equal(details.BillingPostalCode, expense.BillingPostalCode);
+            Assert.Equal(details.BillingCity, expense.BillingCity);
+            Assert.Null(expense.BillingBrand);
+            Assert.False(expense.IsDeleted);
+        }
+
+        [Fact]
+        public void Update_To_Another_Month_Changes_Report_And_Preserves_Identity()
+        {
+            var source = CreateReport();
+            var expense = Expense.Create(source, CreateDetails()).Value;
+            var originalId = expense.Id;
+
+            var destination = ExpenseReport.Restore(
+                Guid.NewGuid(),
+                source.UserId,
+                "Leblanc Juste - novembre 2026",
+                2026,
+                11);
+
+            var details = CreateDetails() with
+            {
+                Date = new DateOnly(2026, 11, 5)
+            };
+
+            var result = expense.Update(destination, details);
+
+            Assert.True(result.IsSuccess);
+            Assert.Equal(originalId, expense.Id);
+            Assert.Equal(destination.Id, expense.ExpenseReportId);
+            Assert.Equal(details.Date, expense.Date);
+        }
+
+        [Fact]
+        public void Update_To_Another_Report_In_Same_Month_Succeeds()
+        {
+            var source = CreateReport();
+            var expense = Expense.Create(source, CreateDetails()).Value;
+
+            var destination = ExpenseReport.Restore(Guid.NewGuid(), source.UserId, source.Title, source.Year, source.Month);
+            var result = expense.Update(destination, CreateDetails());
+
+            Assert.True(result.IsSuccess);
+            Assert.Equal(destination.Id, expense.ExpenseReportId);
+        }
+
+        [Fact]
+        public void Update_When_Date_Is_Outside_Destination_Period_Does_Not_Change_Expense()
+        {
+            var report = CreateReport();
+            var original = CreateDetails();
+            var expense = Expense.Create(report, original).Value;
+
+            var invalid = original with
+            {
+                Date = new DateOnly(2026, 11, 5),
+                Description = "Modification refusée",
+                Amount = 99m
+            };
+
+            var result = expense.Update(report, invalid);
+
+            Assert.False(result.IsSuccess);
+            Assert.Equal("expense.date_outside_report_period", result.Error.Code);
+            Assert.Equal(report.Id, expense.ExpenseReportId);
+            Assert.Equal(original.Date, expense.Date);
+            Assert.Equal(original.Description, expense.Description);
+            Assert.Equal(original.Amount, expense.Amount);
+        }
+
+        [Fact]
+        public void Update_When_Amount_Is_Invalid_Does_Not_Change_Expense()
+        {
+            var report = CreateReport();
+            var original = CreateDetails();
+            var expense = Expense.Create(report, original).Value;
+
+            var invalid = original with
+            {
+                Description = "Modification refusée",
+                Amount = 0m
+            };
+
+            var result = expense.Update(report, invalid);
+
+            Assert.False(result.IsSuccess);
+            Assert.Equal("expense.invalid_amount", result.Error.Code);
+            Assert.Equal(original.Description, expense.Description);
+            Assert.Equal(original.Amount, expense.Amount);
+        }
+
+        [Fact]
+        public void Update_When_Expense_Is_Deleted_Returns_Failure()
+        {
+            var report = CreateReport();
+            var original = CreateDetails();
+            var expense = Expense.Create(report, original).Value;
+            expense.Delete();
+
+            var result = expense.Update(
+                report,
+                original with { Amount = 50m });
+
+            Assert.False(result.IsSuccess);
+            Assert.Equal("expense.deleted", result.Error.Code);
+            Assert.Equal(original.Amount, expense.Amount);
+            Assert.True(expense.IsDeleted);
+        }
 
         // Helpers
         private static ExpenseReport CreateReport()

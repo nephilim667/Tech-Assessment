@@ -112,5 +112,14 @@ namespace WebApi.Infrastructure.Persistence.Repositories
 
             expense.ApplyStateTo(entity);
         }
+
+        public async Task UpdateAsync(Expense expense, CancellationToken cancellationToken = default)
+        {
+            var entity = await context.Expenses.SingleAsync(
+                entity => entity.Id == expense.Id && !entity.IsDeleted,
+                cancellationToken);
+
+            expense.ApplyChangesTo(entity);
+        }
     }
 }

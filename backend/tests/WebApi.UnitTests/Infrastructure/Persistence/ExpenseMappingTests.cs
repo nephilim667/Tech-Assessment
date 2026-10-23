@@ -111,6 +111,52 @@ namespace WebApi.UnitTests.Infrastructure.Persistence
         }
 
 
+        [Fact]
+        public void ApplyChangesTo_Updates_Data_And_Report_Without_Changing_Deletion_State()
+        {
+            var expense = CreateExpense();
+            var entity = expense.ToEntity();
+
+            // Le mapping des données ne doit pas toucher à cet état.
+            entity.IsDeleted = true;
+
+            var destination = ExpenseReport.Restore(Guid.NewGuid(), Guid.NewGuid(), "Note de destination", 2026, 11);
+
+            var details = new ExpenseDetails(
+                Date: new DateOnly(2026, 11, 5),
+                Description: "Parking",
+                Amount: 12.80m,
+                BillingStreet: "5 rue du Parking",
+                BillingPostalCode: "75002",
+                BillingCity: "Paris",
+                BillingBrand: "Parking Centre");
+
+            expense.Update(destination, details);
+
+            expense.ApplyChangesTo(entity);
+
+            Assert.Equal(expense.Id, entity.Id);
+            Assert.Equal(destination.Id, entity.ExpenseReportId);
+            Assert.Equal(details.Date, entity.Date);
+            Assert.Equal(details.Description, entity.Description);
+            Assert.Equal(details.Amount, entity.Amount);
+            Assert.Equal(details.BillingStreet, entity.BillingStreet);
+            Assert.Equal(details.BillingPostalCode, entity.BillingPostalCode);
+            Assert.Equal(details.BillingCity, entity.BillingCity);
+            Assert.Equal(details.BillingBrand, entity.BillingBrand);
+            Assert.True(entity.IsDeleted);
+        }
+
+        [Fact]
+        public void ApplyChangesTo_When_Identifiers_Differ_Throws()
+        {
+            var expense = CreateExpense();
+            var entity = expense.ToEntity();
+            entity.Id = Guid.NewGuid();
+
+            Assert.Throws<InvalidOperationException>(() => expense.ApplyChangesTo(entity));
+        }
+
         // Helpers 
         private static Expense CreateExpense() =>
             Expense.Restore(

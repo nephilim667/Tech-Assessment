@@ -64,6 +64,7 @@ internal static class DependencyInjectionExtensions
         services.AddScoped<IValidator<CreateExpenseRequest>, CreateExpenseRequestValidator>();
         services.AddScoped<IValidator<CreateExpenseReportRequest>, CreateExpenseReportRequestValidator>();
         services.AddScoped<IValidator<GetExpensesRequest>, GetExpensesRequestValidator>();
+        services.AddScoped<IValidator<UpdateExpenseRequest>, UpdateExpenseRequestValidator>();
 
         return services;
     }

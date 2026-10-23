@@ -247,6 +247,195 @@ namespace WebApi.IntegrationTests.Persistance
             Assert.Equal(0m, result.TotalAmount);
         }
 
+        [Theory]
+        [InlineData("active", true)]
+        [InlineData("inactive", true)]
+        [InlineData("deleted_expense", false)]
+        [InlineData("deleted_user", false)]
+        public async Task GetByIdAsync_Applies_Visibility_Without_Deleting_Data(string state, bool expectedVisible)
+        {
+            var token = TestContext.Current.CancellationToken;
+            var (expense, _) = await PrepareExpenseAsync(token, state);
+
+            using var scope = factory.Services.CreateScope();
+            var repository = scope.ServiceProvider.GetRequiredService<IExpenseRepository>();
+
+            var result = await repository.GetByIdAsync(expense.Id, token);
+
+            if (expectedVisible)
+            {
+                Assert.NotNull(result);
+                Assert.Equal(expense.Id, result.Id);
+                Assert.Equal(expense.ExpenseReportId, result.ExpenseReportId);
+                Assert.Equal(expense.Date, result.Date);
+                Assert.Equal(expense.Description, result.Description);
+                Assert.Equal(expense.Amount, result.Amount);
+                Assert.Equal(expense.BillingStreet, result.BillingStreet);
+                Assert.Equal(expense.BillingPostalCode, result.BillingPostalCode);
+                Assert.Equal(expense.BillingCity, result.BillingCity);
+                Assert.Equal(expense.BillingBrand, result.BillingBrand);
+                Assert.False(result.IsDeleted);
+            }
+            else
+            {
+                Assert.Null(result);
+            }
+
+            var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+            Assert.True(await context.Expenses
+                .AnyAsync(entity => entity.Id == expense.Id, token));
+        }
+
+        [Fact]
+        public async Task GetByIdAsync_When_Expense_Does_Not_Exist_Returns_Null()
+        {
+            var token = TestContext.Current.CancellationToken;
+
+            using var scope = factory.Services.CreateScope();
+            var repository = scope.ServiceProvider.GetRequiredService<IExpenseRepository>();
+
+            var result = await repository.GetByIdAsync(Guid.NewGuid(), token);
+
+            Assert.Null(result);
+        }
+
+        [Fact]
+        public async Task UpdateStateAsync_After_Save_Soft_Deletes_Expense_And_Frees_Quota()
+        {
+            var token = TestContext.Current.CancellationToken;
+            var (expense, report) = await PrepareExpenseAsync(token);
+
+            expense.Delete();
+
+            using (var operationScope = factory.Services.CreateScope())
+            {
+                var repository = operationScope.ServiceProvider.GetRequiredService<IExpenseRepository>();
+                var unitOfWork = operationScope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+
+                await repository.UpdateStateAsync(expense, token);
+
+                // Le repository ne sauvegarde pas lui-même.
+                using (var verificationScope = factory.Services.CreateScope())
+                {
+                    var verificationRepository = verificationScope.ServiceProvider.GetRequiredService<IExpenseRepository>();
+
+                    Assert.NotNull(await verificationRepository.GetByIdAsync(expense.Id, token));
+
+                    Assert.Equal(1,
+                        await verificationRepository.CountByUserAndMonthAsync(
+                            report.UserId, report.Year, report.Month, token));
+                }
+
+                await unitOfWork.SaveChangesAsync(token);
+            }
+
+            using var finalScope = factory.Services.CreateScope();
+            var finalRepository = finalScope.ServiceProvider.GetRequiredService<IExpenseRepository>();
+
+            Assert.Null(await finalRepository.GetByIdAsync(expense.Id, token));
+
+            Assert.Equal(0,
+                await finalRepository.CountByUserAndMonthAsync(
+                    report.UserId, report.Year, report.Month, token));
+
+            var context = finalScope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+            var persisted = await context.Expenses
+                .AsNoTracking()
+                .SingleAsync(entity => entity.Id == expense.Id, token);
+
+            Assert.True(persisted.IsDeleted);
+            Assert.Equal(expense.Amount, persisted.Amount);
+            Assert.Equal(expense.Description, persisted.Description);
+        }
+
+        [Fact]
+        public async Task UpdateAsync_After_Save_Persists_Changes_And_Transfer()
+        {
+            var token = TestContext.Current.CancellationToken;
+            var (expense, source) = await PrepareExpenseAsync(token);
+
+            var originalAmount = expense.Amount;
+
+            var destination = ExpenseReport.Restore(
+                Guid.NewGuid(),
+                source.UserId,
+                "Leblanc Juste - novembre 2026",
+                2026,
+                11);
+
+            using (var setupScope = factory.Services.CreateScope())
+            {
+                var context = setupScope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+                context.ExpenseReports.Add(destination.ToEntity());
+                await context.SaveChangesAsync(token);
+            }
+
+            var details = new ExpenseDetails(
+                Date: new DateOnly(2026, 11, 5),
+                Description: "Parking",
+                Amount: 12.80m,
+                BillingStreet: "5 rue du Parking",
+                BillingPostalCode: "75002",
+                BillingCity: "Paris",
+                BillingBrand: "Parking Centre");
+
+            var update = expense.Update(destination, details);
+            Assert.True(update.IsSuccess);
+
+            using (var operationScope = factory.Services.CreateScope())
+            {
+                var repository = operationScope.ServiceProvider.GetRequiredService<IExpenseRepository>();
+                var unitOfWork = operationScope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+
+                await repository.UpdateAsync(expense, token);
+
+                // L’ancienne affectation reste en base avant SaveChanges.
+                using (var verificationScope = factory.Services.CreateScope())
+                {
+                    var context = verificationScope.ServiceProvider.GetRequiredService<AppDbContext>();
+                    var beforeSave = await context.Expenses
+                        .AsNoTracking()
+                        .SingleAsync(entity => entity.Id == expense.Id, token);
+
+                    Assert.Equal(source.Id, beforeSave.ExpenseReportId);
+                    Assert.Equal(originalAmount, beforeSave.Amount);
+                }
+
+                await unitOfWork.SaveChangesAsync(token);
+            }
+
+            using var finalScope = factory.Services.CreateScope();
+            var finalRepository = finalScope.ServiceProvider
+                .GetRequiredService<IExpenseRepository>();
+
+            var persisted = await finalRepository.GetByIdAsync(expense.Id, token);
+
+            Assert.NotNull(persisted);
+            Assert.Equal(expense.Id, persisted.Id);
+            Assert.Equal(destination.Id, persisted.ExpenseReportId);
+            Assert.Equal(details.Date, persisted.Date);
+            Assert.Equal(details.Description, persisted.Description);
+            Assert.Equal(details.Amount, persisted.Amount);
+            Assert.Equal(details.BillingStreet, persisted.BillingStreet);
+            Assert.Equal(details.BillingPostalCode, persisted.BillingPostalCode);
+            Assert.Equal(details.BillingCity, persisted.BillingCity);
+            Assert.Equal(details.BillingBrand, persisted.BillingBrand);
+            Assert.False(persisted.IsDeleted);
+
+            Assert.Equal(
+                0,
+                await finalRepository.CountByUserAndMonthAsync(
+                    source.UserId, source.Year, source.Month, token));
+
+            Assert.Equal(
+                1,
+                await finalRepository.CountByUserAndMonthAsync(
+                    destination.UserId, destination.Year, destination.Month, token));
+        }
+
         // Helpers
         private static User CreateUser() =>
             User.Create(
@@ -266,5 +455,61 @@ namespace WebApi.IntegrationTests.Persistance
                 BillingCity = "Lyon",
                 IsDeleted = isDeleted
             };
+
+        private static (User User, ExpenseReport Report) CreateModels()
+        {
+            var user = User.Create(
+                "Juste",
+                "Leblanc",
+                "10 rue des Lilas",
+                "75001",
+                "Paris",
+                5).Value;
+
+            var report = ExpenseReport.Create(user, 2026, 10).Value;
+
+            return (user, report);
+        }
+
+        private async Task<(Expense Expense, ExpenseReport Report)> PrepareExpenseAsync(CancellationToken token, string state = "active")
+        {
+            var (user, report) = CreateModels();
+
+            var expense = Expense.Create(report,
+                new ExpenseDetails(
+                    Date: new DateOnly(2026, 10, 15),
+                    Description: "Déjeuner",
+                    Amount: 25.50m,
+                    BillingStreet: "20 rue du Restaurant",
+                    BillingPostalCode: "69001",
+                    BillingCity: "Lyon")).Value;
+
+            switch (state)
+            {
+                case "inactive":
+                    user.Deactivate();
+                    break;
+                case "deleted_user":
+                    user.Delete();
+                    break;
+                case "deleted_expense":
+                    expense.Delete();
+                    break;
+            }
+
+            using var scope = factory.Services.CreateScope();
+            var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+            context.Beneficiaries.Add(user.ToEntity());
+            await context.SaveChangesAsync(token);
+
+            context.ExpenseReports.Add(report.ToEntity());
+            await context.SaveChangesAsync(token);
+
+            context.Expenses.Add(expense.ToEntity());
+            await context.SaveChangesAsync(token);
+
+            return (expense, report);
+        }
     }
 }

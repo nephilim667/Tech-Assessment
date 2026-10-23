@@ -21,14 +21,14 @@ namespace WebApi.Domain.Models
         }
 
         public Guid Id { get; }
-        public Guid ExpenseReportId { get; }
-        public DateOnly Date { get; }
-        public string Description { get; }
-        public decimal Amount { get; }
-        public string BillingStreet { get; }
-        public string BillingPostalCode { get; }
-        public string BillingCity { get; }
-        public string? BillingBrand { get; }
+        public Guid ExpenseReportId { get; private set; }
+        public DateOnly Date { get; private set; }
+        public string Description { get; private set; }
+        public decimal Amount { get; private set; }
+        public string BillingStreet { get; private set; }
+        public string BillingPostalCode { get; private set; }
+        public string BillingCity { get; private set; }
+        public string? BillingBrand { get; private set; }
         public bool IsDeleted { get; private set; }
 
         public static Result<Expense> Create(ExpenseReport report, ExpenseDetails details)
@@ -36,30 +36,59 @@ namespace WebApi.Domain.Models
             ArgumentNullException.ThrowIfNull(report);
             ArgumentNullException.ThrowIfNull(details);
 
-            if (string.IsNullOrWhiteSpace(details.Description) || details.Description.Length > 50)
-                return Result<Expense>.Failure(ExpenseErrors.InvalidDescription);
+            var error = Validate(report, details);
 
-            if (details.Amount <= 0 || decimal.Round(details.Amount, 2) != details.Amount)
-                return Result<Expense>.Failure(ExpenseErrors.InvalidAmount);
-
-            if (details.Date.Year != report.Year || details.Date.Month != report.Month)
-                return Result<Expense>.Failure(ExpenseErrors.DateOutsideReportPeriod);
-
-            if (string.IsNullOrWhiteSpace(details.BillingStreet))
-                return Result<Expense>.Failure(ExpenseErrors.BillingStreetRequired);
-
-            if (string.IsNullOrWhiteSpace(details.BillingPostalCode))
-                return Result<Expense>.Failure(ExpenseErrors.BillingPostalCodeRequired);
-
-            if (string.IsNullOrWhiteSpace(details.BillingCity))
-                return Result<Expense>.Failure(ExpenseErrors.BillingCityRequired);
+            if (error is not null)
+                return Result<Expense>.Failure(error);
 
             return Result<Expense>.Success(
-                new Expense(
-                    Guid.NewGuid(),
-                    report.Id,
-                    details,
-                    isDeleted: false));
+                new Expense(Guid.NewGuid(), report.Id, details, isDeleted: false));
+        }
+        private static Error? Validate(ExpenseReport report, ExpenseDetails details)
+        {
+            if (string.IsNullOrWhiteSpace(details.Description) || details.Description.Length > 50)
+                return ExpenseErrors.InvalidDescription;
+
+            if (details.Amount <= 0 || decimal.Round(details.Amount, 2) != details.Amount)
+                return ExpenseErrors.InvalidAmount;
+
+            if (details.Date.Year != report.Year || details.Date.Month != report.Month)
+                return ExpenseErrors.DateOutsideReportPeriod;
+
+            if (string.IsNullOrWhiteSpace(details.BillingStreet))
+                return ExpenseErrors.BillingStreetRequired;
+
+            if (string.IsNullOrWhiteSpace(details.BillingPostalCode))
+                return ExpenseErrors.BillingPostalCodeRequired;
+
+            if (string.IsNullOrWhiteSpace(details.BillingCity))
+                return ExpenseErrors.BillingCityRequired;
+
+            return null;
+        }
+        public Result<Expense> Update(ExpenseReport destination, ExpenseDetails details)
+        {
+            ArgumentNullException.ThrowIfNull(destination);
+            ArgumentNullException.ThrowIfNull(details);
+
+            if (IsDeleted)
+                return Result<Expense>.Failure(ExpenseErrors.Deleted);
+
+            var error = Validate(destination, details);
+
+            if (error is not null)
+                return Result<Expense>.Failure(error);
+
+            ExpenseReportId = destination.Id;
+            Date = details.Date;
+            Description = details.Description;
+            Amount = details.Amount;
+            BillingStreet = details.BillingStreet;
+            BillingPostalCode = details.BillingPostalCode;
+            BillingCity = details.BillingCity;
+            BillingBrand = details.BillingBrand;
+
+            return Result<Expense>.Success(this);
         }
         public Result<Expense> Delete()
         {

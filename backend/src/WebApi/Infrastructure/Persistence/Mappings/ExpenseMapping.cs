@@ -47,5 +47,20 @@ namespace WebApi.Infrastructure.Persistence.Mappings
 
             entity.IsDeleted = expense.IsDeleted;
         }
+
+        public static void ApplyChangesTo(this Expense expense, ExpenseEntity entity)
+        {
+            if (expense.Id != entity.Id)
+                throw new InvalidOperationException("Les identifiants de la dépense et de l’entité doivent correspondre.");
+
+            entity.ExpenseReportId = expense.ExpenseReportId;
+            entity.Date = expense.Date;
+            entity.Description = expense.Description;
+            entity.Amount = expense.Amount;
+            entity.BillingStreet = expense.BillingStreet;
+            entity.BillingPostalCode = expense.BillingPostalCode;
+            entity.BillingCity = expense.BillingCity;
+            entity.BillingBrand = expense.BillingBrand;
+        }
     }
 }
