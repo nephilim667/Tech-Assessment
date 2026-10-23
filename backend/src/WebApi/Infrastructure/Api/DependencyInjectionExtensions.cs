@@ -2,10 +2,12 @@ using FluentValidation;
 using Microsoft.AspNetCore.Identity;
 
 using WebApi.Application.Users;
+using WebApi.Application.Expenses;
 using WebApi.Application.ExpenseReports;
 
 using WebApi.Application.Interfaces.Common;
 using WebApi.Application.Interfaces.Users;
+using WebApi.Application.Interfaces.Expenses;
 using WebApi.Application.Interfaces.ExpenseReports;
 using WebApi.Application.Interfaces.Authentication;
 
@@ -17,6 +19,8 @@ using WebApi.Infrastructure.Api.Administrators.Contracts;
 using WebApi.Infrastructure.Api.Administrators.Validators;
 using WebApi.Infrastructure.Api.Authentication.Contracts;
 using WebApi.Infrastructure.Api.Authentication.Validators;
+using WebApi.Infrastructure.Api.Expenses.Contracts;
+using WebApi.Infrastructure.Api.Expenses.Validators;
 using WebApi.Infrastructure.Api.ExpenseReports.Contracts;
 using WebApi.Infrastructure.Api.ExpenseReports.Validators;
 
@@ -36,6 +40,7 @@ internal static class DependencyInjectionExtensions
     {
         services.AddScoped<IUnitOfWork, UnitOfWork>();
         services.AddScoped<IUserRepository, UserRepository>();
+        services.AddScoped<IExpenseRepository, ExpenseRepository>();
         services.AddScoped<IExpenseReportRepository, ExpenseReportRepository>();
 
         return services;
@@ -44,6 +49,7 @@ internal static class DependencyInjectionExtensions
     public static IServiceCollection AddApplication(this IServiceCollection services)
     {
         services.AddScoped<IUserService, UserService>();
+        services.AddScoped<IExpenseService, ExpenseService>();
         services.AddScoped<IExpenseReportService, ExpenseReportService>();
 
         return services;
@@ -55,6 +61,7 @@ internal static class DependencyInjectionExtensions
         services.AddScoped<IValidator<SetUserStatusRequest>, SetUserStatusRequestValidator>();
         services.AddScoped<IValidator<AuthenticationRequest>, AuthenticationRequestValidator>();
         services.AddScoped<IValidator<CreateAdministratorAccountRequest>, CreateAdministratorAccountRequestValidator>();
+        services.AddScoped<IValidator<CreateExpenseRequest>, CreateExpenseRequestValidator>();
         services.AddScoped<IValidator<CreateExpenseReportRequest>, CreateExpenseReportRequestValidator>();
 
         return services;

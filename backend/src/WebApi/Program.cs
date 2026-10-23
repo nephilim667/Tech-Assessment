@@ -11,6 +11,7 @@ using WebApi.Infrastructure.Api.Users;
 using WebApi.Infrastructure.Api.Authentication;
 using WebApi.Infrastructure.Api.Administrators;
 using WebApi.Infrastructure.Api.ExpenseReports;
+using WebApi.Infrastructure.Api.Expenses;
 
 using WebApi.Infrastructure.Identity;
 using WebApi.Infrastructure.Persistence;
@@ -72,6 +73,7 @@ app.MapAuthenticationEndpoints();
 app.MapUserEndpoints();
 app.MapAdministratorAccountEndpoints();
 app.MapExpenseReportEndpoints();
+app.MapExpenseEndpoints();
 
 app.MapHealthChecks("/health");
 

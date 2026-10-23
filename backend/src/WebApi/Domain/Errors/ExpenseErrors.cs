@@ -21,5 +21,8 @@ namespace WebApi.Domain.Errors
 
         public static readonly Error BillingCityRequired =
             new("expense.billing_city_required", "La ville de facturation est obligatoire.");
+
+        public static readonly Error MonthlyQuotaReached =
+            new("expense.monthly_quota_reached", "Le nombre maximum de dépenses autorisées pour ce mois est atteint.");
     }
 }

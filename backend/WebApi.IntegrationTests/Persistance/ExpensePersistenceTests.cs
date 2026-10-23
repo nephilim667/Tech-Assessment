@@ -52,8 +52,7 @@ namespace WebApi.IntegrationTests.Persistance
         [InlineData("0")]
         [InlineData("-1")]
         [InlineData("12.345")]
-        public async Task SaveChangesAsync_When_Amount_Is_Invalid_Rejects_Expense(
-            string amount)
+        public async Task SaveChangesAsync_When_Amount_Is_Invalid_Rejects_Expense(string amount)
         {
             var token = TestContext.Current.CancellationToken;
             var reportId = await CreateReportAsync(token);
