@@ -11,6 +11,7 @@ using WebApi.Infrastructure.Api.Common.OpenApi;
 
 using WebApi.Infrastructure.Identity;
 using WebApi.Infrastructure.Persistence;
+using WebApi.Infrastructure.Api.Administrators;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -65,9 +66,9 @@ app.UseExceptionHandler();
 app.UseAuthentication();
 app.UseAuthorization();
 
-
 app.MapAuthenticationEndpoints();
 app.MapUserEndpoints();
+app.MapAdministratorAccountEndpoints();
 
 app.MapHealthChecks("/health");
 

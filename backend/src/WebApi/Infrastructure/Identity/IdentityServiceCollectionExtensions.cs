@@ -14,8 +14,7 @@ namespace WebApi.Infrastructure.Identity
 {
     internal static class IdentityServiceCollectionExtensions
     {
-        public static IServiceCollection AddTokenIssuance(
-        this IServiceCollection services)
+        public static IServiceCollection AddTokenIssuance(this IServiceCollection services)
         {
             services.AddOptions<JwtOptions>()
                 .BindConfiguration(JwtOptions.SectionName)
@@ -75,6 +74,11 @@ namespace WebApi.Infrastructure.Identity
                     policy => policy
                         .RequireAuthenticatedUser()
                         .RequireRole(SecurityRoles.Admin, SecurityRoles.SuperAdmin));
+                options.AddPolicy(
+                    AuthorizationPolicies.SuperAdministrators,
+                    policy => policy
+                        .RequireAuthenticatedUser()
+                        .RequireRole(SecurityRoles.SuperAdmin));
             });
 
             services.AddSingleton<ITokenRevocationStore, RedisTokenRevocationStore>();
