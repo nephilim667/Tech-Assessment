@@ -3,6 +3,8 @@ using WebApi.Domain.Errors;
 using WebApi.Domain.Models;
 using WebApi.Domain.Contracts.Expenses;
 
+using WebApi.Application.Common.Errors;
+using WebApi.Application.Expenses.Contracts;
 using WebApi.Application.Interfaces.Users;
 using WebApi.Application.Interfaces.Common;
 using WebApi.Application.Interfaces.Expenses;
@@ -55,6 +57,21 @@ namespace WebApi.Application.Expenses
                     return result;
                 },
                 cancellationToken);
+        }
+
+        public async Task<Result<ExpensePage>> GetPageAsync(Guid expenseReportId, int pageNumber, CancellationToken cancellationToken = default)
+        {
+            if (pageNumber < 1)
+                return Result<ExpensePage>.Failure(PaginationErrors.InvalidPage);
+
+            var report = await reports.GetByIdAsync(expenseReportId, cancellationToken);
+
+            if (report is null)
+                return Result<ExpensePage>.Failure(ExpenseReportErrors.NotFound);
+
+            var page = await expenses.GetPageAsync(expenseReportId, pageNumber,cancellationToken);
+
+            return Result<ExpensePage>.Success(page);
         }
     }
 }

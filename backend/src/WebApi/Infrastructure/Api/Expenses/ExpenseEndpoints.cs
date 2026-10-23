@@ -15,6 +15,14 @@ namespace WebApi.Infrastructure.Api.Expenses
                 .WithTags("Expenses")
                 .RequireAuthorization(AuthorizationPolicies.Administrators);
 
+            expenses.MapGet("", GetExpensesEndpoint.GetAsync)
+                    .AddEndpointFilter<ValidationFilter<GetExpensesRequest>>()
+                    .Produces<ExpensePageResponse>()
+                    .ProducesValidationProblem()
+                    .ProducesProblem(StatusCodes.Status404NotFound)
+                    .Produces(StatusCodes.Status401Unauthorized)
+                    .Produces(StatusCodes.Status403Forbidden);
+
             expenses.MapPost("", CreateExpenseEndpoint.CreateAsync)
                 .AddEndpointFilter<ValidationFilter<CreateExpenseRequest>>()
                 .Produces<ExpenseResponse>(StatusCodes.Status201Created)

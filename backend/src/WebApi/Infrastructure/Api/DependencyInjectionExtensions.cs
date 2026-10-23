@@ -63,6 +63,7 @@ internal static class DependencyInjectionExtensions
         services.AddScoped<IValidator<CreateAdministratorAccountRequest>, CreateAdministratorAccountRequestValidator>();
         services.AddScoped<IValidator<CreateExpenseRequest>, CreateExpenseRequestValidator>();
         services.AddScoped<IValidator<CreateExpenseReportRequest>, CreateExpenseReportRequestValidator>();
+        services.AddScoped<IValidator<GetExpensesRequest>, GetExpensesRequestValidator>();
 
         return services;
     }

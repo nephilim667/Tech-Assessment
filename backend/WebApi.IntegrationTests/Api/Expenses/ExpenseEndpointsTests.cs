@@ -15,6 +15,7 @@ using WebApi.Application.Interfaces.Authentication;
 using WebApi.Infrastructure.Api.Expenses.Contracts;
 using WebApi.Infrastructure.Persistence;
 using WebApi.Infrastructure.Persistence.Mappings;
+using WebApi.Infrastructure.Persistence.Entities;
 using WebApi.IntegrationTests.Infrastructure;
 
 namespace WebApi.IntegrationTests.Api.Expenses
@@ -278,7 +279,182 @@ namespace WebApi.IntegrationTests.Api.Expenses
             }
         }
 
-        // Helper
+        [Fact]
+        public async Task GetExpenses_Returns_Pages_Of_Five_And_Global_Total()
+        {
+            var token = TestContext.Current.CancellationToken;
+            var reports = await PrepareReportsAsync(token, reportCount: 2);
+            var report = reports[0];
+
+            using (var setupScope = factory.Services.CreateScope())
+            {
+                var context = setupScope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+                // Six dépenses : total 10 + 20 + ... + 60 = 210.
+                context.Expenses.AddRange(
+                    Enumerable.Range(1, 6)
+                        .Select(day => CreateExpenseEntity(
+                            report.Id, day, day * 10m)));
+
+                var deleted = CreateExpenseEntity(report.Id, 31, 1000m);
+                deleted.IsDeleted = true;
+
+                context.Expenses.Add(deleted);
+                context.Expenses.Add(CreateExpenseEntity(reports[1].Id, 15, 9000m));
+
+                await context.SaveChangesAsync(token);
+            }
+
+            using var client = await factory.CreateSuperAdminClientAsync(token);
+
+            // Page 1 par défaut.
+            using var firstResponse = await client.GetAsync(GetUrl(report.Id), token);
+            Assert.Equal(HttpStatusCode.OK, firstResponse.StatusCode);
+
+            var first = await firstResponse.Content.ReadFromJsonAsync<ExpensePageResponse>(token);
+
+            Assert.NotNull(first);
+            Assert.Equal(1, first.PageNumber);
+            Assert.Equal(5, first.PageSize);
+            Assert.Equal(6, first.TotalCount);
+            Assert.Equal(2, first.TotalPages);
+            Assert.Equal(210m, first.TotalAmount);
+            Assert.Equal(
+                new[] { 6, 5, 4, 3, 2 },
+                first.Items.Select(expense => expense.Date.Day).ToArray());
+
+            using var secondResponse = await client.GetAsync($"{GetUrl(report.Id)}?page=2", token);
+
+            Assert.Equal(HttpStatusCode.OK, secondResponse.StatusCode);
+
+            var second = await secondResponse.Content.ReadFromJsonAsync<ExpensePageResponse>(token);
+
+            Assert.NotNull(second);
+            Assert.Equal(2, second.PageNumber);
+            Assert.Equal(5, second.PageSize);
+            Assert.Equal(6, second.TotalCount);
+            Assert.Equal(2, second.TotalPages);
+            Assert.Equal(210m, second.TotalAmount);
+            Assert.Equal(1, Assert.Single(second.Items).Date.Day);
+
+            using var beyondResponse = await client.GetAsync($"{GetUrl(report.Id)}?page=3", token);
+
+            Assert.Equal(HttpStatusCode.OK, beyondResponse.StatusCode);
+
+            var beyond = await beyondResponse.Content.ReadFromJsonAsync<ExpensePageResponse>(token);
+
+            Assert.NotNull(beyond);
+            Assert.Empty(beyond.Items);
+            Assert.Equal(3, beyond.PageNumber);
+            Assert.Equal(5, beyond.PageSize);
+            Assert.Equal(6, beyond.TotalCount);
+            Assert.Equal(2, beyond.TotalPages);
+            Assert.Equal(210m, beyond.TotalAmount);
+        }
+
+        [Fact]
+        public async Task GetExpenses_When_Report_Is_Empty_Returns_Empty_Page()
+        {
+            var token = TestContext.Current.CancellationToken;
+            var report = (await PrepareReportsAsync(token))[0];
+
+            using var client = await factory.CreateSuperAdminClientAsync(token);
+
+            using var response = await client.GetAsync(GetUrl(report.Id), token);
+
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+            var page = await response.Content.ReadFromJsonAsync<ExpensePageResponse>(token);
+
+            Assert.NotNull(page);
+            Assert.Empty(page.Items);
+            Assert.Equal(1, page.PageNumber);
+            Assert.Equal(5, page.PageSize);
+            Assert.Equal(0, page.TotalCount);
+            Assert.Equal(0, page.TotalPages);
+            Assert.Equal(0m, page.TotalAmount);
+        }
+
+        [Theory]
+        [InlineData(0)]
+        [InlineData(-1)]
+        public async Task GetExpenses_When_Page_Is_Invalid_Returns_ValidationError(int page)
+        {
+            var token = TestContext.Current.CancellationToken;
+            using var client = await factory.CreateSuperAdminClientAsync(token);
+
+            using var response = await client.GetAsync($"{GetUrl(Guid.NewGuid())}?page={page}", token);
+
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+            using var problem = JsonDocument.Parse(await response.Content.ReadAsStringAsync(token));
+
+            Assert.True(problem.RootElement.GetProperty("errors").TryGetProperty("Page", out _));
+            Assert.False(problem.RootElement.TryGetProperty("items", out _));
+        }
+
+        [Fact]
+        public async Task GetExpenses_When_Report_Does_Not_Exist_Returns_NotFound()
+        {
+            var token = TestContext.Current.CancellationToken;
+            using var client = await factory.CreateSuperAdminClientAsync(token);
+
+            using var response = await client.GetAsync(GetUrl(Guid.NewGuid()), token);
+
+            Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        }
+
+        [Theory]
+        [InlineData("inactive", HttpStatusCode.OK)]
+        [InlineData("deleted", HttpStatusCode.NotFound)]
+        public async Task GetExpenses_Applies_User_Visibility(string state, HttpStatusCode expectedStatus)
+        {
+            var token = TestContext.Current.CancellationToken;
+            var report = (await PrepareReportsAsync(token, state: state))[0];
+
+            using var client = await factory.CreateSuperAdminClientAsync(token);
+            using var response = await client.GetAsync(GetUrl(report.Id), token);
+
+            Assert.Equal(expectedStatus, response.StatusCode);
+        }
+
+        [Theory]
+        [InlineData("Admin", HttpStatusCode.OK)]
+        [InlineData("SuperAdmin", HttpStatusCode.OK)]
+        [InlineData("", HttpStatusCode.Forbidden)]
+        public async Task GetExpenses_Applies_Role_Authorization(string role, HttpStatusCode expectedStatus)
+        {
+            var token = TestContext.Current.CancellationToken;
+            var report = (await PrepareReportsAsync(token))[0];
+
+            using var scope = factory.Services.CreateScope();
+            var issuer = scope.ServiceProvider.GetRequiredService<IAccessTokenIssuer>();
+
+            string[] roles = string.IsNullOrEmpty(role) ? [] : [role];
+            var accessToken = issuer.Generate(Guid.NewGuid(), roles);
+
+            using var client = factory.CreateClient();
+
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken.AccessToken);
+
+            using var response = await client.GetAsync(GetUrl(report.Id), token);
+
+            Assert.Equal(expectedStatus, response.StatusCode);
+        }
+
+        [Fact]
+        public async Task GetExpenses_When_Anonymous_Returns_Unauthorized()
+        {
+            var token = TestContext.Current.CancellationToken;
+            using var client = factory.CreateClient();
+
+            using var response = await client.GetAsync(GetUrl(Guid.NewGuid()), token);
+
+            Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        }
+
+
+        // Helpers
         private async Task<ExpenseReport[]> PrepareReportsAsync(CancellationToken token, int quota = 5, string state = "active", int reportCount = 1)
         {
             var user = User.Create(
@@ -349,5 +525,18 @@ namespace WebApi.IntegrationTests.Api.Expenses
 
             throw new TimeoutException("Les deux requêtes HTTP ne se sont pas retrouvées en attente du verrou utilisateur.");
         }
+
+        private static ExpenseEntity CreateExpenseEntity(Guid reportId, int day, decimal amount) => new()
+        {
+            Id = Guid.NewGuid(),
+            ExpenseReportId = reportId,
+            Date = new DateOnly(2026, 10, day),
+            Description = "Déjeuner",
+            Amount = amount,
+            BillingStreet = "20 rue du Restaurant",
+            BillingPostalCode = "69001",
+            BillingCity = "Lyon",
+            IsDeleted = false
+        };
     }
 }

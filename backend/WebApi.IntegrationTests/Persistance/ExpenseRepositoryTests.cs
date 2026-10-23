@@ -124,6 +124,129 @@ namespace WebApi.IntegrationTests.Persistance
             Assert.Equal(expense.Amount, persisted.Amount);
         }
 
+        [Fact]
+        public async Task GetPageAsync_Paginates_By_Five_And_Returns_Global_Total()
+        {
+            var token = TestContext.Current.CancellationToken;
+            var user = CreateUser();
+
+            var report = ExpenseReport.Create(user, 2026, 10).Value;
+            var otherReport = ExpenseReport.Create(user, 2026, 10).Value;
+
+            // Identifiants triés pour vérifier explicitement le départage
+            // des dépenses qui ont la même date.
+            var ids = Enumerable.Range(0, 7)
+                .Select(_ => Guid.NewGuid())
+                .OrderBy(id => id)
+                .ToArray();
+
+            var expenses = ids.Select((id, index) =>
+            {
+                var entity = CreateExpenseEntity(report);
+                entity.Id = id;
+                entity.Amount = (index + 1) * 10m;
+                return entity;
+            }).ToArray();
+
+            // Cette dépense doit apparaître avant toutes les autres.
+            expenses[6].Date = new DateOnly(2026, 10, 16);
+
+            var deleted = CreateExpenseEntity(report, isDeleted: true);
+            deleted.Amount = 1000m;
+
+            var unrelated = CreateExpenseEntity(otherReport);
+            unrelated.Amount = 9000m;
+
+            using (var setupScope = factory.Services.CreateScope())
+            {
+                var context = setupScope.ServiceProvider
+                    .GetRequiredService<AppDbContext>();
+
+                context.Beneficiaries.Add(user.ToEntity());
+                await context.SaveChangesAsync(token);
+
+                context.ExpenseReports.AddRange(
+                    report.ToEntity(),
+                    otherReport.ToEntity());
+
+                await context.SaveChangesAsync(token);
+
+                context.Expenses.AddRange(expenses);
+                context.Expenses.AddRange(deleted, unrelated);
+
+                await context.SaveChangesAsync(token);
+            }
+
+            using var scope = factory.Services.CreateScope();
+            var repository = scope.ServiceProvider.GetRequiredService<IExpenseRepository>();
+
+            var first = await repository.GetPageAsync(report.Id, 1, token);
+            var second = await repository.GetPageAsync(report.Id, 2, token);
+            var beyondLast = await repository.GetPageAsync(report.Id, 3, token);
+            var veryLargePage = await repository.GetPageAsync(report.Id, int.MaxValue, token);
+
+            Assert.Equal(1, first.Page.PageNumber);
+            Assert.Equal(5, first.Page.PageSize);
+            Assert.Equal(7, first.Page.TotalCount);
+            Assert.Equal(2, first.Page.TotalPages);
+            Assert.Equal(280m, first.TotalAmount);
+
+            Assert.Equal(
+                new[] { ids[6], ids[0], ids[1], ids[2], ids[3] },
+                first.Page.Items.Select(expense => expense.Id).ToArray());
+
+            Assert.Equal(2, second.Page.PageNumber);
+            Assert.Equal(5, second.Page.PageSize);
+            Assert.Equal(7, second.Page.TotalCount);
+            Assert.Equal(2, second.Page.TotalPages);
+            Assert.Equal(280m, second.TotalAmount);
+
+            Assert.Equal(
+                new[] { ids[4], ids[5] },
+                second.Page.Items.Select(expense => expense.Id).ToArray());
+
+            Assert.Empty(beyondLast.Page.Items);
+            Assert.Equal(3, beyondLast.Page.PageNumber);
+            Assert.Equal(7, beyondLast.Page.TotalCount);
+            Assert.Equal(280m, beyondLast.TotalAmount);
+
+            Assert.Empty(veryLargePage.Page.Items);
+            Assert.Equal(int.MaxValue, veryLargePage.Page.PageNumber);
+            Assert.Equal(7, veryLargePage.Page.TotalCount);
+            Assert.Equal(280m, veryLargePage.TotalAmount);
+        }
+
+        [Fact]
+        public async Task GetPageAsync_When_Report_Has_No_Expenses_Returns_Empty_Page()
+        {
+            var token = TestContext.Current.CancellationToken;
+            var user = CreateUser();
+            var report = ExpenseReport.Create(user, 2026, 10).Value;
+
+            using (var setupScope = factory.Services.CreateScope())
+            {
+                var context = setupScope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+                context.Beneficiaries.Add(user.ToEntity());
+                await context.SaveChangesAsync(token);
+
+                context.ExpenseReports.Add(report.ToEntity());
+                await context.SaveChangesAsync(token);
+            }
+
+            using var scope = factory.Services.CreateScope();
+            var repository = scope.ServiceProvider.GetRequiredService<IExpenseRepository>();
+
+            var result = await repository.GetPageAsync(report.Id, 1, token);
+
+            Assert.Empty(result.Page.Items);
+            Assert.Equal(1, result.Page.PageNumber);
+            Assert.Equal(5, result.Page.PageSize);
+            Assert.Equal(0, result.Page.TotalCount);
+            Assert.Equal(0, result.Page.TotalPages);
+            Assert.Equal(0m, result.TotalAmount);
+        }
+
         // Helpers
         private static User CreateUser() =>
             User.Create(

@@ -4,11 +4,13 @@ using WebApi.Domain.Models;
 using WebApi.Domain.Common;
 using WebApi.Domain.Contracts.Expenses;
 
+using WebApi.Application.Common.Pagination;
 using WebApi.Application.Expenses;
-using WebApi.Application.Interfaces.Common;
-using WebApi.Application.Interfaces.ExpenseReports;
-using WebApi.Application.Interfaces.Expenses;
+using WebApi.Application.Expenses.Contracts;
 using WebApi.Application.Interfaces.Users;
+using WebApi.Application.Interfaces.Common;
+using WebApi.Application.Interfaces.Expenses;
+using WebApi.Application.Interfaces.ExpenseReports;
 
 namespace WebApi.UnitTests.Application.Expenses
 {
@@ -178,6 +180,72 @@ namespace WebApi.UnitTests.Application.Expenses
             Assert.Equal("expense.invalid_amount", result.Error.Code);
 
             await AssertNoWriteAsync();
+        }
+
+        [Fact]
+        public async Task GetPageAsync_When_Report_Exists_Returns_Requested_Page()
+        {
+            var token = TestContext.Current.CancellationToken;
+            var (_, report) = PrepareUserAndReport(token);
+
+            var expected = new ExpensePage(
+                new PagedResult<Expense>(
+                    Items: Array.Empty<Expense>(),
+                    PageNumber: 2,
+                    PageSize: 5,
+                    TotalCount: 0),
+                TotalAmount: 0m);
+
+            _expenses.GetPageAsync(report.Id, 2, token).Returns(Task.FromResult(expected));
+
+            var result = await CreateService().GetPageAsync(report.Id, 2, token);
+
+            Assert.True(result.IsSuccess);
+            Assert.Same(expected, result.Value);
+
+            await _reports.Received(1).GetByIdAsync(report.Id, token);
+            await _expenses.Received(1).GetPageAsync(report.Id, 2, token);
+        }
+
+        [Fact]
+        public async Task GetPageAsync_When_Report_Is_Missing_Does_Not_Query_Expenses()
+        {
+            var token = TestContext.Current.CancellationToken;
+            var reportId = Guid.NewGuid();
+
+            _reports.GetByIdAsync(reportId, token).Returns(Task.FromResult<ExpenseReport?>(null));
+
+            var result = await CreateService().GetPageAsync(reportId, 1, token);
+
+            Assert.False(result.IsSuccess);
+            Assert.Equal("expense_report.not_found", result.Error.Code);
+
+            await _expenses.DidNotReceive().GetPageAsync(
+                Arg.Any<Guid>(),
+                Arg.Any<int>(),
+                Arg.Any<CancellationToken>());
+        }
+
+        [Theory]
+        [InlineData(0)]
+        [InlineData(-1)]
+        public async Task GetPageAsync_When_Page_Is_Invalid_Does_Not_Query_Repositories(int pageNumber)
+        {
+            var token = TestContext.Current.CancellationToken;
+
+            var result = await CreateService().GetPageAsync(Guid.NewGuid(), pageNumber, token);
+
+            Assert.False(result.IsSuccess);
+            Assert.Equal("pagination.invalid_page", result.Error.Code);
+
+            await _reports.DidNotReceive().GetByIdAsync(
+                Arg.Any<Guid>(),
+                Arg.Any<CancellationToken>());
+
+            await _expenses.DidNotReceive().GetPageAsync(
+                Arg.Any<Guid>(),
+                Arg.Any<int>(),
+                Arg.Any<CancellationToken>());
         }
 
 
