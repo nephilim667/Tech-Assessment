@@ -73,5 +73,56 @@ namespace WebApi.UnitTests.Infrastructure.Persistence
             Assert.Null(expense.BillingBrand);
             Assert.Equal(isDeleted, expense.IsDeleted);
         }
+
+        [Fact]
+        public void ApplyStateTo_Updates_Deletion_State_Without_Changing_Expense_Data()
+        {
+            var expense = CreateExpense();
+            expense.Delete();
+
+            var entity = expense.ToEntity();
+
+            // Simule les valeurs déjà présentes en base.
+            entity.IsDeleted = false;
+            entity.Description = "Description persistée";
+            entity.Amount = 42m;
+            entity.BillingCity = "Paris";
+
+            var originalReportId = entity.ExpenseReportId;
+
+            expense.ApplyStateTo(entity);
+
+            Assert.True(entity.IsDeleted);
+            Assert.Equal(expense.Id, entity.Id);
+            Assert.Equal(originalReportId, entity.ExpenseReportId);
+            Assert.Equal("Description persistée", entity.Description);
+            Assert.Equal(42m, entity.Amount);
+            Assert.Equal("Paris", entity.BillingCity);
+        }
+
+        [Fact]
+        public void ApplyStateTo_When_Identifiers_Differ_Throws()
+        {
+            var expense = CreateExpense();
+            var entity = expense.ToEntity();
+            entity.Id = Guid.NewGuid();
+
+            Assert.Throws<InvalidOperationException>(() => expense.ApplyStateTo(entity));
+        }
+
+
+        // Helpers 
+        private static Expense CreateExpense() =>
+            Expense.Restore(
+                id: Guid.NewGuid(),
+                expenseReportId: Guid.NewGuid(),
+                details: new ExpenseDetails(
+                    Date: new DateOnly(2026, 10, 15),
+                    Description: "Déjeuner",
+                    Amount: 25.50m,
+                    BillingStreet: "20 rue du Restaurant",
+                    BillingPostalCode: "69001",
+                    BillingCity: "Lyon"),
+                isDeleted: false);
     }
 }

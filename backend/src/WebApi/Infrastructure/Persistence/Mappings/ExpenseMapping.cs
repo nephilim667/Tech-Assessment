@@ -39,5 +39,13 @@ namespace WebApi.Infrastructure.Persistence.Mappings
                     BillingBrand: entity.BillingBrand),
                 isDeleted: entity.IsDeleted);
         }
+
+        public static void ApplyStateTo(this Expense expense, ExpenseEntity entity)
+        {
+            if (expense.Id != entity.Id)
+                throw new InvalidOperationException("Les identifiants de la dépense et de l’entité doivent correspondre.");
+
+            entity.IsDeleted = expense.IsDeleted;
+        }
     }
 }

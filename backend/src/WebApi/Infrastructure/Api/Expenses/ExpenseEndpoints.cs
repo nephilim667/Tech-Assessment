@@ -24,13 +24,20 @@ namespace WebApi.Infrastructure.Api.Expenses
                     .Produces(StatusCodes.Status403Forbidden);
 
             expenses.MapPost("", CreateExpenseEndpoint.CreateAsync)
-                .AddEndpointFilter<ValidationFilter<CreateExpenseRequest>>()
-                .Produces<ExpenseResponse>(StatusCodes.Status201Created)
-                .ProducesValidationProblem()
-                .ProducesProblem(StatusCodes.Status404NotFound)
-                .ProducesProblem(StatusCodes.Status409Conflict)
-                .Produces(StatusCodes.Status401Unauthorized)
-                .Produces(StatusCodes.Status403Forbidden);
+                    .AddEndpointFilter<ValidationFilter<CreateExpenseRequest>>()
+                    .Produces<ExpenseResponse>(StatusCodes.Status201Created)
+                    .ProducesValidationProblem()
+                    .ProducesProblem(StatusCodes.Status404NotFound)
+                    .ProducesProblem(StatusCodes.Status409Conflict)
+                    .Produces(StatusCodes.Status401Unauthorized)
+                    .Produces(StatusCodes.Status403Forbidden);
+
+            expenses.MapDelete("/{expenseId:guid}", DeleteExpenseEndpoint.DeleteAsync)
+                    .Produces(StatusCodes.Status204NoContent)
+                    .ProducesProblem(StatusCodes.Status404NotFound)
+                    .ProducesProblem(StatusCodes.Status409Conflict)
+                    .Produces(StatusCodes.Status401Unauthorized)
+                    .Produces(StatusCodes.Status403Forbidden);
 
             return endpoints;
         }

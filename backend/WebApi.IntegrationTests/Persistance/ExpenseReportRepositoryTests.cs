@@ -2,8 +2,11 @@
 using Microsoft.Extensions.DependencyInjection;
 
 using WebApi.Domain.Models;
+using WebApi.Domain.Contracts.Expenses;
+
 using WebApi.Application.Interfaces.Common;
 using WebApi.Application.Interfaces.ExpenseReports;
+using WebApi.Application.Interfaces.Expenses;
 
 using WebApi.Infrastructure.Persistence;
 using WebApi.Infrastructure.Persistence.Mappings;
@@ -114,6 +117,110 @@ namespace WebApi.IntegrationTests.Persistance
             Assert.Null(result);
         }
 
+        [Theory]
+        [InlineData("active", true)]
+        [InlineData("inactive", true)]
+        [InlineData("deleted_expense", false)]
+        [InlineData("deleted_user", false)]
+        public async Task GetByIdAsync_Applies_Visibility_Without_Deleting_Data(string state, bool expectedVisible)
+        {
+            var token = TestContext.Current.CancellationToken;
+            var (expense, _) = await PrepareExpenseAsync(token, state);
+
+            using var scope = factory.Services.CreateScope();
+            var repository = scope.ServiceProvider.GetRequiredService<IExpenseRepository>();
+
+            var result = await repository.GetByIdAsync(expense.Id, token);
+
+            if (expectedVisible)
+            {
+                Assert.NotNull(result);
+                Assert.Equal(expense.Id, result.Id);
+                Assert.Equal(expense.ExpenseReportId, result.ExpenseReportId);
+                Assert.Equal(expense.Date, result.Date);
+                Assert.Equal(expense.Description, result.Description);
+                Assert.Equal(expense.Amount, result.Amount);
+                Assert.Equal(expense.BillingStreet, result.BillingStreet);
+                Assert.Equal(expense.BillingPostalCode, result.BillingPostalCode);
+                Assert.Equal(expense.BillingCity, result.BillingCity);
+                Assert.Equal(expense.BillingBrand, result.BillingBrand);
+                Assert.False(result.IsDeleted);
+            }
+            else
+            {
+                Assert.Null(result);
+            }
+
+            var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+            Assert.True(await context.Expenses
+                .AnyAsync(entity => entity.Id == expense.Id, token));
+        }
+
+        [Fact]
+        public async Task GetByIdAsync_When_Expense_Does_Not_Exist_Returns_Null()
+        {
+            var token = TestContext.Current.CancellationToken;
+
+            using var scope = factory.Services.CreateScope();
+            var repository = scope.ServiceProvider.GetRequiredService<IExpenseRepository>();
+
+            var result = await repository.GetByIdAsync(Guid.NewGuid(), token);
+
+            Assert.Null(result);
+        }
+
+        [Fact]
+        public async Task UpdateStateAsync_After_Save_Soft_Deletes_Expense_And_Frees_Quota()
+        {
+            var token = TestContext.Current.CancellationToken;
+            var (expense, report) = await PrepareExpenseAsync(token);
+
+            expense.Delete();
+
+            using (var operationScope = factory.Services.CreateScope())
+            {
+                var repository = operationScope.ServiceProvider.GetRequiredService<IExpenseRepository>();
+                var unitOfWork = operationScope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+
+                await repository.UpdateStateAsync(expense, token);
+
+                // Le repository ne sauvegarde pas lui-même.
+                using (var verificationScope = factory.Services.CreateScope())
+                {
+                    var verificationRepository = verificationScope.ServiceProvider.GetRequiredService<IExpenseRepository>();
+
+                    Assert.NotNull(await verificationRepository.GetByIdAsync(expense.Id, token));
+
+                    Assert.Equal(1,
+                        await verificationRepository.CountByUserAndMonthAsync(
+                            report.UserId, report.Year, report.Month, token));
+                }
+
+                await unitOfWork.SaveChangesAsync(token);
+            }
+
+            using var finalScope = factory.Services.CreateScope();
+            var finalRepository = finalScope.ServiceProvider.GetRequiredService<IExpenseRepository>();
+
+            Assert.Null(await finalRepository.GetByIdAsync(expense.Id, token));
+
+            Assert.Equal(0,
+                await finalRepository.CountByUserAndMonthAsync(
+                    report.UserId, report.Year, report.Month, token));
+
+            var context = finalScope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+            var persisted = await context.Expenses
+                .AsNoTracking()
+                .SingleAsync(entity => entity.Id == expense.Id, token);
+
+            Assert.True(persisted.IsDeleted);
+            Assert.Equal(expense.Amount, persisted.Amount);
+            Assert.Equal(expense.Description, persisted.Description);
+        }
+
+        // Helpers
         private async Task PersistAsync(User user, ExpenseReport report, CancellationToken cancellationToken)
         {
             using var scope = factory.Services.CreateScope();
@@ -140,6 +247,47 @@ namespace WebApi.IntegrationTests.Persistance
             var report = ExpenseReport.Create(user, 2026, 10).Value;
 
             return (user, report);
+        }
+
+        private async Task<(Expense Expense, ExpenseReport Report)> PrepareExpenseAsync(CancellationToken token, string state = "active")
+        {
+            var (user, report) = CreateModels();
+
+            var expense = Expense.Create(report,
+                new ExpenseDetails(
+                    Date: new DateOnly(2026, 10, 15),
+                    Description: "Déjeuner",
+                    Amount: 25.50m,
+                    BillingStreet: "20 rue du Restaurant",
+                    BillingPostalCode: "69001",
+                    BillingCity: "Lyon")).Value;
+
+            switch (state)
+            {
+                case "inactive":
+                    user.Deactivate();
+                    break;
+                case "deleted_user":
+                    user.Delete();
+                    break;
+                case "deleted_expense":
+                    expense.Delete();
+                    break;
+            }
+
+            using var scope = factory.Services.CreateScope();
+            var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+            context.Beneficiaries.Add(user.ToEntity());
+            await context.SaveChangesAsync(token);
+
+            context.ExpenseReports.Add(report.ToEntity());
+            await context.SaveChangesAsync(token);
+
+            context.Expenses.Add(expense.ToEntity());
+            await context.SaveChangesAsync(token);
+
+            return (expense, report);
         }
     }
 }

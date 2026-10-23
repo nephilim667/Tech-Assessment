@@ -24,5 +24,11 @@ namespace WebApi.Domain.Errors
 
         public static readonly Error MonthlyQuotaReached =
             new("expense.monthly_quota_reached", "Le nombre maximum de dépenses autorisées pour ce mois est atteint.");
+
+        public static readonly Error Deleted =
+            new("expense.deleted", "Une dépense supprimée ne peut plus être modifiée.");
+
+        public static readonly Error NotFound =
+            new("expense.not_found", "La dépense demandée est introuvable.");
     }
 }

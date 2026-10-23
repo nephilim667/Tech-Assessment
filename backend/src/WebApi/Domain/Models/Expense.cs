@@ -29,7 +29,7 @@ namespace WebApi.Domain.Models
         public string BillingPostalCode { get; }
         public string BillingCity { get; }
         public string? BillingBrand { get; }
-        public bool IsDeleted { get; }
+        public bool IsDeleted { get; private set; }
 
         public static Result<Expense> Create(ExpenseReport report, ExpenseDetails details)
         {
@@ -60,6 +60,14 @@ namespace WebApi.Domain.Models
                     report.Id,
                     details,
                     isDeleted: false));
+        }
+        public Result<Expense> Delete()
+        {
+            if (IsDeleted)
+                return Result<Expense>.Failure(ExpenseErrors.Deleted);
+
+            IsDeleted = true;
+            return Result<Expense>.Success(this);
         }
 
         // Restaure l’état persisté sans réappliquer les règles de création.

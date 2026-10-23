@@ -84,5 +84,33 @@ namespace WebApi.Infrastructure.Persistence.Repositories
                     TotalCount: totalCount),
                     TotalAmount: totalAmount);
         }
+
+        public async Task<Expense?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
+        {
+            var query = from expense in context.Expenses
+                        join report in context.ExpenseReports
+                            on expense.ExpenseReportId equals report.Id
+                        join user in context.Beneficiaries
+                            on report.UserId equals user.Id
+                        where expense.Id == id
+                            && !expense.IsDeleted
+                            && !user.IsDeleted
+                        select expense;
+
+            var entity = await query
+                .AsNoTracking()
+                .SingleOrDefaultAsync(cancellationToken);
+
+            return entity?.ToDomain();
+        }
+
+        public async Task UpdateStateAsync(Expense expense, CancellationToken cancellationToken = default)
+        {
+            var entity = await context.Expenses.SingleAsync(
+                entity => entity.Id == expense.Id && !entity.IsDeleted,
+                cancellationToken);
+
+            expense.ApplyStateTo(entity);
+        }
     }
 }

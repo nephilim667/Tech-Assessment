@@ -73,5 +73,38 @@ namespace WebApi.Application.Expenses
 
             return Result<ExpensePage>.Success(page);
         }
+
+        public Task<Result<Expense>> DeleteAsync(Guid expenseReportId, Guid expenseId, CancellationToken cancellationToken = default)
+        {
+            return unitOfWork.ExecuteInTransactionAsync(
+                async token =>
+                {
+                    var report = await reports.GetByIdAsync(expenseReportId, token);
+                    if (report is null)
+                        return Result<Expense>.Failure(ExpenseReportErrors.NotFound);
+
+                    var user = await users.GetByIdForUpdateAsync(report.UserId, token);
+                    if (user is null)
+                        return Result<Expense>.Failure(UserErrors.NotFound);
+
+                    // Lecture après acquisition du verrou :
+                    // la dépense a pu être supprimée ou transférée pendant l’attente.
+                    var expense = await expenses.GetByIdAsync(expenseId, token);
+
+                    if (expense is null || expense.ExpenseReportId != expenseReportId)
+                        return Result<Expense>.Failure(ExpenseErrors.NotFound);
+
+                    var result = expense.Delete();
+
+                    if (!result.IsSuccess)
+                        return result;
+
+                    await expenses.UpdateStateAsync(expense, token);
+                    await unitOfWork.SaveChangesAsync(token);
+
+                    return result;
+                },
+                cancellationToken);
+        }
     }
 }

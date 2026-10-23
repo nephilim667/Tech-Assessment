@@ -155,6 +155,38 @@ namespace WebApi.UnitTests.Domain.Expenses
             Assert.Equal(expectedCode, result.Error.Code);
         }
 
+        [Fact]
+        public void Delete_When_Expense_Is_Not_Deleted_Marks_It_As_Deleted()
+        {
+            var expense = Expense.Create(CreateReport(), CreateDetails()).Value;
+
+            var initialId = expense.Id;
+            var initialReportId = expense.ExpenseReportId;
+            var initialAmount = expense.Amount;
+
+            var result = expense.Delete();
+
+            Assert.True(result.IsSuccess);
+            Assert.Same(expense, result.Value);
+            Assert.True(expense.IsDeleted);
+            Assert.Equal(initialId, expense.Id);
+            Assert.Equal(initialReportId, expense.ExpenseReportId);
+            Assert.Equal(initialAmount, expense.Amount);
+        }
+
+        [Fact]
+        public void Delete_When_Expense_Is_Already_Deleted_Returns_Failure()
+        {
+            var expense = Expense.Create(CreateReport(), CreateDetails()).Value;
+            expense.Delete();
+
+            var result = expense.Delete();
+
+            Assert.False(result.IsSuccess);
+            Assert.Equal("expense.deleted", result.Error.Code);
+            Assert.True(expense.IsDeleted);
+        }
+
 
         // Helpers
         private static ExpenseReport CreateReport()

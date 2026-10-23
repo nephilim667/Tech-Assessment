@@ -248,6 +248,109 @@ namespace WebApi.UnitTests.Application.Expenses
                 Arg.Any<CancellationToken>());
         }
 
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public async Task DeleteAsync_When_User_Is_Active_Or_Inactive_Persists_Deletion(bool isActive)
+        {
+            var token = TestContext.Current.CancellationToken;
+            var (user, report) = PrepareUserAndReport(token);
+
+            if (!isActive)
+                user.Deactivate();
+
+            var expense = Expense.Create(report, CreateDetails()).Value;
+
+            _expenses.GetByIdAsync(expense.Id, token).Returns(Task.FromResult<Expense?>(expense));
+
+            var result = await CreateService().DeleteAsync(report.Id, expense.Id, token);
+
+            Assert.True(result.IsSuccess);
+            Assert.True(result.Value.IsDeleted);
+
+            await _unitOfWork.Received(1).ExecuteInTransactionAsync(
+                Arg.Any<Func<CancellationToken, Task<Result<Expense>>>>(),
+                token);
+
+            await _users.Received(1).GetByIdForUpdateAsync(user.Id, token);
+            await _expenses.Received(1).UpdateStateAsync(expense, token);
+            await _unitOfWork.Received(1).SaveChangesAsync(token);
+        }
+
+        [Fact]
+        public async Task DeleteAsync_When_Report_Is_Missing_Does_Not_Write()
+        {
+            var token = TestContext.Current.CancellationToken;
+            var reportId = Guid.NewGuid();
+
+            _reports.GetByIdAsync(reportId, token).Returns(Task.FromResult<ExpenseReport?>(null));
+
+            var result = await CreateService().DeleteAsync(reportId, Guid.NewGuid(), token);
+
+            Assert.False(result.IsSuccess);
+            Assert.Equal("expense_report.not_found", result.Error.Code);
+
+            await _users.DidNotReceive().GetByIdForUpdateAsync(
+                Arg.Any<Guid>(),
+                Arg.Any<CancellationToken>());
+
+            await AssertNoWriteAsync();
+        }
+
+        [Fact]
+        public async Task DeleteAsync_When_User_Disappears_Before_Lock_Does_Not_Write()
+        {
+            var token = TestContext.Current.CancellationToken;
+            var (user, report) = PrepareUserAndReport(token);
+
+            _users.GetByIdForUpdateAsync(user.Id, token).Returns(Task.FromResult<User?>(null));
+
+            var result = await CreateService().DeleteAsync(report.Id, Guid.NewGuid(), token);
+
+            Assert.False(result.IsSuccess);
+            Assert.Equal("user.not_found", result.Error.Code);
+
+            await AssertNoWriteAsync();
+        }
+
+        [Fact]
+        public async Task DeleteAsync_When_Expense_Is_Missing_Does_Not_Write()
+        {
+            var token = TestContext.Current.CancellationToken;
+            var (_, report) = PrepareUserAndReport(token);
+            var expenseId = Guid.NewGuid();
+
+            _expenses.GetByIdAsync(expenseId, token)
+                .Returns(Task.FromResult<Expense?>(null));
+
+            var result = await CreateService().DeleteAsync(report.Id, expenseId, token);
+
+            Assert.False(result.IsSuccess);
+            Assert.Equal("expense.not_found", result.Error.Code);
+
+            await AssertNoWriteAsync();
+        }
+
+        [Fact]
+        public async Task DeleteAsync_When_Expense_Belongs_To_Another_Report_Does_Not_Write()
+        {
+            var token = TestContext.Current.CancellationToken;
+            var (user, report) = PrepareUserAndReport(token);
+
+            var otherReport = ExpenseReport.Create(user, 2026, 10).Value;
+            var expense = Expense.Create(otherReport, CreateDetails()).Value;
+
+            _expenses.GetByIdAsync(expense.Id, token)
+                .Returns(Task.FromResult<Expense?>(expense));
+
+            var result = await CreateService().DeleteAsync(report.Id, expense.Id, token);
+
+            Assert.False(result.IsSuccess);
+            Assert.Equal("expense.not_found", result.Error.Code);
+
+            await AssertNoWriteAsync();
+        }
+
 
         // Helpers
         private (User User, ExpenseReport Report) PrepareUserAndReport(CancellationToken token)
@@ -267,6 +370,17 @@ namespace WebApi.UnitTests.Application.Expenses
         private async Task AssertNoWriteAsync()
         {
             await _expenses.DidNotReceive().AddAsync(
+                Arg.Any<Expense>(),
+                Arg.Any<CancellationToken>());
+
+            await _unitOfWork.DidNotReceive().SaveChangesAsync(
+                Arg.Any<CancellationToken>());
+
+            await _expenses.DidNotReceive().AddAsync(
+                Arg.Any<Expense>(),
+                Arg.Any<CancellationToken>());
+
+            await _expenses.DidNotReceive().UpdateStateAsync(
                 Arg.Any<Expense>(),
                 Arg.Any<CancellationToken>());
 
