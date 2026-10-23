@@ -2,9 +2,14 @@ using FluentValidation;
 using Microsoft.AspNetCore.Identity;
 
 using WebApi.Application.Users;
+using WebApi.Application.ExpenseReports;
+
 using WebApi.Application.Interfaces.Common;
 using WebApi.Application.Interfaces.Users;
+using WebApi.Application.Interfaces.ExpenseReports;
 using WebApi.Application.Interfaces.Authentication;
+
+using WebApi.Infrastructure.Api.Common.ExceptionHandler;
 
 using WebApi.Infrastructure.Api.Users.Contracts;
 using WebApi.Infrastructure.Api.Users.Validators;
@@ -12,7 +17,8 @@ using WebApi.Infrastructure.Api.Administrators.Contracts;
 using WebApi.Infrastructure.Api.Administrators.Validators;
 using WebApi.Infrastructure.Api.Authentication.Contracts;
 using WebApi.Infrastructure.Api.Authentication.Validators;
-using WebApi.Infrastructure.Api.Common.ExceptionHandler;
+using WebApi.Infrastructure.Api.ExpenseReports.Contracts;
+using WebApi.Infrastructure.Api.ExpenseReports.Validators;
 
 using WebApi.Infrastructure.Identity;
 using WebApi.Infrastructure.Identity.Configuration;
@@ -21,14 +27,16 @@ using WebApi.Infrastructure.Persistence;
 using WebApi.Infrastructure.Persistence.Common;
 using WebApi.Infrastructure.Persistence.Repositories;
 
+
 namespace WebApi.Infrastructure.Api;
 
 internal static class DependencyInjectionExtensions
 {
     public static IServiceCollection AddPersistence(this IServiceCollection services)
     {
-        services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IUnitOfWork, UnitOfWork>();
+        services.AddScoped<IUserRepository, UserRepository>();
+        services.AddScoped<IExpenseReportRepository, ExpenseReportRepository>();
 
         return services;
     }
@@ -36,6 +44,7 @@ internal static class DependencyInjectionExtensions
     public static IServiceCollection AddApplication(this IServiceCollection services)
     {
         services.AddScoped<IUserService, UserService>();
+        services.AddScoped<IExpenseReportService, ExpenseReportService>();
 
         return services;
     }
@@ -46,6 +55,7 @@ internal static class DependencyInjectionExtensions
         services.AddScoped<IValidator<SetUserStatusRequest>, SetUserStatusRequestValidator>();
         services.AddScoped<IValidator<AuthenticationRequest>, AuthenticationRequestValidator>();
         services.AddScoped<IValidator<CreateAdministratorAccountRequest>, CreateAdministratorAccountRequestValidator>();
+        services.AddScoped<IValidator<CreateExpenseReportRequest>, CreateExpenseReportRequestValidator>();
 
         return services;
     }

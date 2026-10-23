@@ -4,14 +4,16 @@ using Microsoft.EntityFrameworkCore;
 
 using Scalar.AspNetCore;
 
+using WebApi.Infrastructure.Api.Common.OpenApi;
+
 using WebApi.Infrastructure.Api;
 using WebApi.Infrastructure.Api.Users;
 using WebApi.Infrastructure.Api.Authentication;
-using WebApi.Infrastructure.Api.Common.OpenApi;
+using WebApi.Infrastructure.Api.Administrators;
+using WebApi.Infrastructure.Api.ExpenseReports;
 
 using WebApi.Infrastructure.Identity;
 using WebApi.Infrastructure.Persistence;
-using WebApi.Infrastructure.Api.Administrators;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -69,6 +71,7 @@ app.UseAuthorization();
 app.MapAuthenticationEndpoints();
 app.MapUserEndpoints();
 app.MapAdministratorAccountEndpoints();
+app.MapExpenseReportEndpoints();
 
 app.MapHealthChecks("/health");
 
