@@ -217,6 +217,54 @@ namespace WebApi.Infrastructure.Persistence.Migrations
                     b.ToTable("AspNetUserTokens", (string)null);
                 });
 
+            modelBuilder.Entity("WebApi.Infrastructure.Persistence.Entities.ExpenseEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("numeric");
+
+                    b.Property<string>("BillingBrand")
+                        .HasColumnType("text");
+
+                    b.Property<string>("BillingCity")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("BillingPostalCode")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("BillingStreet")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<Guid>("ExpenseReportId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExpenseReportId", "Date", "Id");
+
+                    b.ToTable("expenses", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_expenses_Amount", "\"Amount\" > 0 AND \"Amount\" = round(\"Amount\", 2)");
+                        });
+                });
+
             modelBuilder.Entity("WebApi.Infrastructure.Persistence.Entities.ExpenseReportEntity", b =>
                 {
                     b.Property<Guid>("Id")
@@ -338,6 +386,15 @@ namespace WebApi.Infrastructure.Persistence.Migrations
                     b.HasOne("Microsoft.AspNetCore.Identity.IdentityUser<System.Guid>", null)
                         .WithMany()
                         .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("WebApi.Infrastructure.Persistence.Entities.ExpenseEntity", b =>
+                {
+                    b.HasOne("WebApi.Infrastructure.Persistence.Entities.ExpenseReportEntity", null)
+                        .WithMany()
+                        .HasForeignKey("ExpenseReportId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

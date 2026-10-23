@@ -1,6 +1,7 @@
 ﻿using WebApi.Domain.Common;
 using WebApi.Domain.Models;
 using WebApi.Domain.Errors;
+using WebApi.Domain.Contracts.Users;
 
 using WebApi.Application.Interfaces.Common;
 using WebApi.Application.Interfaces.Users;

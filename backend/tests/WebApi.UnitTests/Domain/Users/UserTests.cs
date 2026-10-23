@@ -1,4 +1,5 @@
 ﻿using WebApi.Domain.Models;
+using WebApi.Domain.Contracts.Users;
 
 namespace WebApi.UnitTests.Domain.Users
 {

@@ -60,9 +60,7 @@ namespace WebApi.UnitTests.Domain.ExpenseReports
         [InlineData(10000, 10)]
         [InlineData(2026, 0)]
         [InlineData(2026, 13)]
-        public void Create_When_Period_Is_Invalid_Returns_Failure(
-            int year,
-            int month)
+        public void Create_When_Period_Is_Invalid_Returns_Failure(int year, int month)
         {
             // Act
             var result = ExpenseReport.Create(CreateUser(), year, month);

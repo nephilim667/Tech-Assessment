@@ -10,13 +10,15 @@ internal sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ide
 {
     public DbSet<UserEntity> Beneficiaries => Set<UserEntity>();
     public DbSet<ExpenseReportEntity> ExpenseReports => Set<ExpenseReportEntity>();
+    public DbSet<ExpenseEntity> Expenses => Set<ExpenseEntity>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
 
         builder.Entity<UserEntity>()
-            .ToTable("users", table => table.HasCheckConstraint("CK_users_MaxExpensesPerMonth", "\"MaxExpensesPerMonth\" >= 1"));
+               .ToTable("users", table => table.HasCheckConstraint("CK_users_MaxExpensesPerMonth", "\"MaxExpensesPerMonth\" >= 1"));
+
         builder.Entity<ExpenseReportEntity>(entity =>
         {
             entity.ToTable("expense_reports", table =>
@@ -26,9 +28,22 @@ internal sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ide
             });
 
             entity.HasOne<UserEntity>()
-                .WithMany()
-                .HasForeignKey(report => report.UserId)
-                .OnDelete(DeleteBehavior.Restrict);
+                  .WithMany()
+                  .HasForeignKey(report => report.UserId)
+                  .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<ExpenseEntity>(entity =>
+        {
+            entity.ToTable("expenses", table =>
+            {
+                table.HasCheckConstraint("CK_expenses_Amount", "\"Amount\" > 0 AND \"Amount\" = round(\"Amount\", 2)");
+            });
+
+            entity.HasOne<ExpenseReportEntity>()
+                  .WithMany()
+                  .HasForeignKey(expense => expense.ExpenseReportId)
+                  .OnDelete(DeleteBehavior.Cascade);
         });
     }
 

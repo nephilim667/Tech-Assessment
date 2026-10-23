@@ -1,4 +1,6 @@
 ﻿using WebApi.Domain.Models;
+using WebApi.Domain.Contracts.Users;
+
 using WebApi.Infrastructure.Persistence.Entities;
 using WebApi.Infrastructure.Persistence.Mappings;
 

@@ -1,4 +1,5 @@
 ﻿using WebApi.Domain.Common;
+using WebApi.Domain.Contracts.Users;
 using WebApi.Domain.Models;
 
 namespace WebApi.Application.Interfaces.Users

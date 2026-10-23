@@ -1,5 +1,5 @@
-﻿using WebApi.Domain.Models;
-
+﻿using WebApi.Domain.Contracts.Users;
+   
 using WebApi.Application.Interfaces.Users;
 using WebApi.Infrastructure.Api.Users.Mappings;
 using WebApi.Infrastructure.Api.Users.Contracts;
