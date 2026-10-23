@@ -25,6 +25,9 @@ namespace WebApi.Domain.Errors
         public static readonly Error Deleted = 
             new("user.deleted", "Un utilisateur supprimé ne peut plus être modifié.");
 
+        public static readonly Error Inactive =
+            new("user.inactive", "Cette opération n’est pas autorisée pour un utilisateur inactif.");
+
 
         public static readonly Error NotFound = 
             new("user.not_found", "L’utilisateur demandé est introuvable.");

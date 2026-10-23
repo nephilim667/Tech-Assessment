@@ -9,6 +9,7 @@ namespace WebApi.Infrastructure.Persistence;
 internal sealed class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbContext<IdentityUser<Guid>, IdentityRole<Guid>, Guid>(options)
 {
     public DbSet<UserEntity> Beneficiaries => Set<UserEntity>();
+    public DbSet<ExpenseReportEntity> ExpenseReports => Set<ExpenseReportEntity>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -16,6 +17,19 @@ internal sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ide
 
         builder.Entity<UserEntity>()
             .ToTable("users", table => table.HasCheckConstraint("CK_users_MaxExpensesPerMonth", "\"MaxExpensesPerMonth\" >= 1"));
+        builder.Entity<ExpenseReportEntity>(entity =>
+        {
+            entity.ToTable("expense_reports", table =>
+            {
+                table.HasCheckConstraint("CK_expense_reports_Year", "\"Year\" BETWEEN 1 AND 9999");
+                table.HasCheckConstraint("CK_expense_reports_Month", "\"Month\" BETWEEN 1 AND 12");
+            });
+
+            entity.HasOne<UserEntity>()
+                .WithMany()
+                .HasForeignKey(report => report.UserId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
     }
 
     internal static async Task SeedAsync(DbContext context, CancellationToken cancellationToken)

@@ -217,6 +217,37 @@ namespace WebApi.Infrastructure.Persistence.Migrations
                     b.ToTable("AspNetUserTokens", (string)null);
                 });
 
+            modelBuilder.Entity("WebApi.Infrastructure.Persistence.Entities.ExpenseReportEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Month")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Year")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "Year", "Month");
+
+                    b.ToTable("expense_reports", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_expense_reports_Month", "\"Month\" BETWEEN 1 AND 12");
+
+                            t.HasCheckConstraint("CK_expense_reports_Year", "\"Year\" BETWEEN 1 AND 9999");
+                        });
+                });
+
             modelBuilder.Entity("WebApi.Infrastructure.Persistence.Entities.UserEntity", b =>
                 {
                     b.Property<Guid>("Id")
@@ -308,6 +339,15 @@ namespace WebApi.Infrastructure.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("WebApi.Infrastructure.Persistence.Entities.ExpenseReportEntity", b =>
+                {
+                    b.HasOne("WebApi.Infrastructure.Persistence.Entities.UserEntity", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 #pragma warning restore 612, 618
