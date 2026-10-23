@@ -19,9 +19,10 @@ namespace WebApi.Infrastructure.Api.ExpenseReports.Endpoints
 
             if (result.IsSuccess)
             {
-                return Results.Json(
-                    result.Value.ToResponse(),
-                    statusCode: StatusCodes.Status201Created);
+                return Results.CreatedAtRoute(
+                    routeName: ExpenseReportEndpoints.GetByIdRouteName,
+                    routeValues: new { id = result.Value.Id },
+                    value: result.Value.ToResponse());
             }
 
             var error = result.Error;

@@ -224,6 +224,110 @@ namespace WebApi.IntegrationTests.Api.ExpenseReports
             Assert.True(userErrors.GetArrayLength() > 0);
         }
 
+        [Fact]
+        public async Task Create_Returns_Location_Allowing_Report_To_Be_Read()
+        {
+            var token = TestContext.Current.CancellationToken;
+            var userId = await CreateUserAsync(isActive: true, token);
+
+            using var client = await factory.CreateSuperAdminClientAsync(token);
+
+            using var creation = await client.PostAsJsonAsync(
+                "/api/expense-reports",
+                new CreateExpenseReportRequest(userId, 2026, 10),
+                token);
+
+            Assert.Equal(HttpStatusCode.Created, creation.StatusCode);
+            Assert.NotNull(creation.Headers.Location);
+
+            var created = await creation.Content.ReadFromJsonAsync<ExpenseReportResponse>(token);
+
+            Assert.NotNull(created);
+
+            using var response = await client.GetAsync(
+                creation.Headers.Location,
+                token);
+
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+            var report = await response.Content.ReadFromJsonAsync<ExpenseReportResponse>(token);
+
+            Assert.Equal(created, report);
+        }
+
+        [Fact]
+        public async Task GetById_When_Report_Does_Not_Exist_Returns_NotFound()
+        {
+            var token = TestContext.Current.CancellationToken;
+            using var client = await factory.CreateSuperAdminClientAsync(token);
+
+            using var response = await client.GetAsync(
+                $"/api/expense-reports/{Guid.NewGuid()}",
+                token);
+
+            Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        }
+
+        [Theory]
+        [InlineData(false, HttpStatusCode.OK)]
+        [InlineData(true, HttpStatusCode.NotFound)]
+        public async Task GetById_When_User_Becomes_Inactive_Or_Deleted_Returns_Expected_Status(bool isDeleted,HttpStatusCode expectedStatus)
+        {
+            var token = TestContext.Current.CancellationToken;
+            var userId = await CreateUserAsync(isActive: true, token);
+
+            using var client = await factory.CreateSuperAdminClientAsync(token);
+
+            using var creation = await client.PostAsJsonAsync(
+                "/api/expense-reports",
+                new CreateExpenseReportRequest(userId, 2026, 10),
+                token);
+
+            Assert.Equal(HttpStatusCode.Created, creation.StatusCode);
+
+            var report = await creation.Content.ReadFromJsonAsync<ExpenseReportResponse>(token);
+
+            Assert.NotNull(report);
+
+            // Prépare le nouvel état du bénéficiaire.
+            using (var scope = factory.Services.CreateScope())
+            {
+                var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+                var user = await context.Beneficiaries.SingleAsync(entity => entity.Id == userId, token);
+
+                user.IsActive = false;
+                user.IsDeleted = isDeleted;
+
+                await context.SaveChangesAsync(token);
+            }
+
+            using var response = await client.GetAsync(
+                $"/api/expense-reports/{report.Id}",
+                token);
+
+            Assert.Equal(expectedStatus, response.StatusCode);
+
+            // La suppression logique du bénéficiaire conserve bien la note.
+            using var verificationScope = factory.Services.CreateScope();
+            var verificationContext = verificationScope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+            Assert.True(await verificationContext.ExpenseReports.AnyAsync(entity => entity.Id == report.Id, token));
+        }
+
+        [Fact]
+        public async Task GetById_When_Anonymous_Returns_Unauthorized()
+        {
+            var token = TestContext.Current.CancellationToken;
+            using var client = factory.CreateClient();
+
+            using var response = await client.GetAsync(
+                $"/api/expense-reports/{Guid.NewGuid()}",
+                token);
+
+            Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        }
+
 
         private async Task<Guid> CreateUserAsync(bool isActive, CancellationToken cancellationToken)
         {

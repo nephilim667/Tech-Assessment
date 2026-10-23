@@ -8,12 +8,21 @@ namespace WebApi.Infrastructure.Api.ExpenseReports
 {
     public static class ExpenseReportEndpoints
     {
+        internal const string GetByIdRouteName = "GetExpenseReportById";
+
         public static IEndpointRouteBuilder MapExpenseReportEndpoints(this IEndpointRouteBuilder endpoints)
         {
             var reports = endpoints
                 .MapGroup("/api/expense-reports")
                 .WithTags("Expense reports")
                 .RequireAuthorization(AuthorizationPolicies.Administrators);
+
+            reports.MapGet("/{id:guid}", GetExpenseReportByIdEndpoint.GetAsync)
+                   .WithName(GetByIdRouteName)
+                   .Produces<ExpenseReportResponse>()
+                   .ProducesProblem(StatusCodes.Status404NotFound)
+                   .Produces(StatusCodes.Status401Unauthorized)
+                   .Produces(StatusCodes.Status403Forbidden);
 
             reports.MapPost("", CreateExpenseReportEndpoint.CreateAsync)
                    .AddEndpointFilter<ValidationFilter<CreateExpenseReportRequest>>()

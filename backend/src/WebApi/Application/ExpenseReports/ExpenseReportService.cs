@@ -10,6 +10,15 @@ namespace WebApi.Application.ExpenseReports
 {
     internal sealed class ExpenseReportService(IUserRepository userRepository, IExpenseReportRepository reportRepository, IUnitOfWork unitOfWork) : IExpenseReportService
     {
+        public async Task<Result<ExpenseReport>> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
+        {
+            var report = await reportRepository.GetByIdAsync(id, cancellationToken);
+
+            return report is null
+                ? Result<ExpenseReport>.Failure(ExpenseReportErrors.NotFound)
+                : Result<ExpenseReport>.Success(report);
+        }
+
         public Task<Result<ExpenseReport>> CreateAsync(Guid userId, int year, int month, CancellationToken cancellationToken = default)
         {
             return unitOfWork.ExecuteInTransactionAsync(

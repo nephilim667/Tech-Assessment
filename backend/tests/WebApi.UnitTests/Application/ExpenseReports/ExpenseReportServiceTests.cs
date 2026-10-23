@@ -97,6 +97,45 @@ namespace WebApi.UnitTests.Application.ExpenseReports
             await _unitOfWork.DidNotReceive().SaveChangesAsync(Arg.Any<CancellationToken>());
         }
 
+        [Fact]
+        public async Task GetByIdAsync_When_Report_Exists_Returns_Report()
+        {
+            // Arrange
+            var token = TestContext.Current.CancellationToken;
+            var report = ExpenseReport.Create(CreateUser(), 2026, 10).Value;
+
+            _reports.GetByIdAsync(report.Id, token).Returns(Task.FromResult<ExpenseReport?>(report));
+
+            var service = CreateService();
+
+            // Act
+            var result = await service.GetByIdAsync(report.Id, token);
+
+            // Assert
+            Assert.True(result.IsSuccess);
+            Assert.Same(report, result.Value);
+        }
+
+        [Fact]
+        public async Task GetByIdAsync_When_Report_Is_Missing_Returns_NotFound()
+        {
+            // Arrange
+            var token = TestContext.Current.CancellationToken;
+            var id = Guid.NewGuid();
+
+            _reports.GetByIdAsync(id, token).Returns(Task.FromResult<ExpenseReport?>(null));
+
+            var service = CreateService();
+
+            // Act
+            var result = await service.GetByIdAsync(id, token);
+
+            // Assert
+            Assert.False(result.IsSuccess);
+            Assert.Equal("expense_report.not_found", result.Error.Code);
+        }
+
+        // Helpers
         private ExpenseReportService CreateService() => new(_users, _reports, _unitOfWork);
 
         private static User CreateUser() =>
