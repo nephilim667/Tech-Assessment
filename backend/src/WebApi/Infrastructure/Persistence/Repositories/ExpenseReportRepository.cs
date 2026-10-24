@@ -39,5 +39,14 @@ namespace WebApi.Infrastructure.Persistence.Repositories
 
             return entities.Select(entity => entity.ToDomain()).ToArray();
         }
+
+        public async Task DeleteAsync(ExpenseReport report, CancellationToken cancellationToken = default)
+        {
+            var entity = await context.ExpenseReports.SingleAsync(
+                entity => entity.Id == report.Id,
+                cancellationToken);
+
+            context.ExpenseReports.Remove(entity);
+        }
     }
 }

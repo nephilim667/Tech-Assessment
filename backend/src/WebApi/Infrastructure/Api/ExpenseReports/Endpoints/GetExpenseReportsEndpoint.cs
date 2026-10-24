@@ -14,8 +14,7 @@ namespace WebApi.Infrastructure.Api.ExpenseReports.Endpoints
 
             if (result.IsSuccess)
             {
-                return Results.Ok(
-                    result.Value.Select(report => report.ToResponse()).ToArray());
+                return Results.Ok(result.Value.Select(report => report.ToResponse()).ToArray());
             }
 
             var statusCode = result.Error == UserErrors.NotFound

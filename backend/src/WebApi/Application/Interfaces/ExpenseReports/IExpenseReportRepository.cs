@@ -7,5 +7,6 @@ namespace WebApi.Application.Interfaces.ExpenseReports
         Task<ExpenseReport?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
         Task<IReadOnlyList<ExpenseReport>> GetByUserAndPeriodAsync(Guid userId, int year, int month, CancellationToken cancellationToken = default);
         Task AddAsync(ExpenseReport report, CancellationToken cancellationToken = default);
+        Task DeleteAsync(ExpenseReport report, CancellationToken cancellationToken = default);
     }
 }

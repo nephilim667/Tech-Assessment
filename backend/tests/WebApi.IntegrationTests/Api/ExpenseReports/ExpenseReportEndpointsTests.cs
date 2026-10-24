@@ -9,6 +9,7 @@ using Microsoft.Extensions.DependencyInjection;
 using WebApi.Domain.Models;
 using WebApi.Infrastructure.Persistence;
 using WebApi.Infrastructure.Persistence.Mappings;
+using WebApi.Infrastructure.Api.Expenses.Contracts;
 using WebApi.Infrastructure.Api.ExpenseReports.Contracts;
 
 using WebApi.Application.Common;
@@ -383,9 +384,7 @@ namespace WebApi.IntegrationTests.Api.ExpenseReports
         [Theory]
         [InlineData(false, HttpStatusCode.OK)]
         [InlineData(true, HttpStatusCode.NotFound)]
-        public async Task GetReports_Applies_User_Visibility(
-            bool isDeleted,
-            HttpStatusCode expectedStatus)
+        public async Task GetReports_Applies_User_Visibility(bool isDeleted, HttpStatusCode expectedStatus)
         {
             var token = TestContext.Current.CancellationToken;
             var userId = await CreateUserAsync(isActive: true, token);
@@ -482,6 +481,143 @@ namespace WebApi.IntegrationTests.Api.ExpenseReports
             Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         }
 
+        [Fact]
+        public async Task Delete_Removes_Report_And_All_Expenses_And_Frees_Quota()
+        {
+            var token = TestContext.Current.CancellationToken;
+            var userId = await CreateUserAsync(isActive: true, token);
+
+            using var client = await factory.CreateSuperAdminClientAsync(token);
+            var source = await CreateReportForListAsync(client, userId, 2026, 10, token);
+            var remaining = await CreateReportForListAsync(client, userId, 2026, 10, token);
+
+            var expenses = new List<ExpenseResponse>();
+
+            // CreateUserAsync configure un quota de 5.
+            for (var index = 0; index < 5; index++)
+                expenses.Add(await CreateExpenseForReportAsync(client, source.Id, token));
+
+            using var blockedCreation = await client.PostAsJsonAsync(
+                $"/api/expense-reports/{remaining.Id}/expenses",
+                CreateExpenseRequestForReport(),
+                token);
+
+            Assert.Equal(HttpStatusCode.Conflict, blockedCreation.StatusCode);
+
+            // La cascade doit aussi supprimer cette dépense déjà supprimée logiquement.
+            using var softDeletion = await client.DeleteAsync($"/api/expense-reports/{source.Id}/expenses/{expenses[0].Id}", token);
+            Assert.Equal(HttpStatusCode.NoContent, softDeletion.StatusCode);
+
+            using var deletion = await client.DeleteAsync($"/api/expense-reports/{source.Id}", token);
+            Assert.Equal(HttpStatusCode.NoContent, deletion.StatusCode);
+
+            using var lookup = await client.GetAsync($"/api/expense-reports/{source.Id}", token);
+            Assert.Equal(HttpStatusCode.NotFound, lookup.StatusCode);
+
+            using var repeatedDeletion = await client.DeleteAsync($"/api/expense-reports/{source.Id}", token);
+            Assert.Equal(HttpStatusCode.NotFound, repeatedDeletion.StatusCode);
+
+            using (var scope = factory.Services.CreateScope())
+            {
+                var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+                Assert.False(await context.ExpenseReports.AnyAsync(report => report.Id == source.Id, token));
+                Assert.False(await context.Expenses.AnyAsync(expense => expense.ExpenseReportId == source.Id, token));
+                Assert.True(await context.ExpenseReports.AnyAsync(report => report.Id == remaining.Id, token));
+                Assert.True(await context.Beneficiaries.AnyAsync(user => user.Id == userId, token));
+            }
+
+            // Une autre note du même mois peut à nouveau recevoir une dépense.
+            await CreateExpenseForReportAsync(client, remaining.Id, token);
+        }
+
+        [Theory]
+        [InlineData(false, HttpStatusCode.NoContent)]
+        [InlineData(true, HttpStatusCode.NotFound)]
+        public async Task Delete_Applies_User_State_Restrictions(bool isDeleted, HttpStatusCode expectedStatus)
+        {
+            var token = TestContext.Current.CancellationToken;
+            var userId = await CreateUserAsync(isActive: true, token);
+
+            using var client = await factory.CreateSuperAdminClientAsync(token);
+
+            var report = await CreateReportForListAsync(client, userId, 2026, 10, token);
+            var expense = await CreateExpenseForReportAsync(client, report.Id, token);
+
+            using (var setupScope = factory.Services.CreateScope())
+            {
+                var context = setupScope.ServiceProvider.GetRequiredService<AppDbContext>();
+                var user = await context.Beneficiaries.SingleAsync(entity => entity.Id == userId, token);
+
+                user.IsActive = false;
+                user.IsDeleted = isDeleted;
+
+                await context.SaveChangesAsync(token);
+            }
+
+            using var response = await client.DeleteAsync($"/api/expense-reports/{report.Id}", token);
+            Assert.Equal(expectedStatus, response.StatusCode);
+
+            using var verificationScope = factory.Services.CreateScope();
+            var verificationContext = verificationScope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+            Assert.Equal(isDeleted, await verificationContext.ExpenseReports.AnyAsync(entity => entity.Id == report.Id, token));
+            Assert.Equal(isDeleted, await verificationContext.Expenses.AnyAsync(entity => entity.Id == expense.Id, token));
+        }
+
+        [Fact]
+        public async Task Delete_When_Report_Does_Not_Exist_Returns_NotFound()
+        {
+            var token = TestContext.Current.CancellationToken;
+            using var client = await factory.CreateSuperAdminClientAsync(token);
+
+            using var response = await client.DeleteAsync($"/api/expense-reports/{Guid.NewGuid()}", token);
+            Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+
+            using var problem = JsonDocument.Parse(await response.Content.ReadAsStringAsync(token));
+            Assert.Equal("expense_report.not_found", problem.RootElement.GetProperty("code").GetString());
+        }
+
+        [Theory]
+        [InlineData("Admin", HttpStatusCode.NoContent)]
+        [InlineData("SuperAdmin", HttpStatusCode.NoContent)]
+        [InlineData("", HttpStatusCode.Forbidden)]
+        public async Task Delete_Applies_Role_Authorization(string role, HttpStatusCode expectedStatus)
+        {
+            var token = TestContext.Current.CancellationToken;
+            var userId = await CreateUserAsync(isActive: true, token);
+
+            using var setupClient = await factory.CreateSuperAdminClientAsync(token);
+
+            var report = await CreateReportForListAsync(setupClient, userId, 2026, 10, token);
+
+            using var scope = factory.Services.CreateScope();
+            var issuer = scope.ServiceProvider.GetRequiredService<IAccessTokenIssuer>();
+
+            string[] roles = string.IsNullOrEmpty(role) ? [] : [role];
+            var accessToken = issuer.Generate(Guid.NewGuid(), roles);
+
+            using var client = factory.CreateClient();
+
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken.AccessToken);
+
+            using var response = await client.DeleteAsync($"/api/expense-reports/{report.Id}", token);
+            Assert.Equal(expectedStatus, response.StatusCode);
+
+            var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            Assert.Equal(expectedStatus == HttpStatusCode.Forbidden, await context.ExpenseReports.AnyAsync(entity => entity.Id == report.Id, token));
+        }
+
+        [Fact]
+        public async Task Delete_When_Anonymous_Returns_Unauthorized()
+        {
+            var token = TestContext.Current.CancellationToken;
+            using var client = factory.CreateClient();
+
+            using var response = await client.DeleteAsync($"/api/expense-reports/{Guid.NewGuid()}", token);
+            Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        }
+
 
         // Helpers
         private async Task<Guid> CreateUserAsync(bool isActive, CancellationToken cancellationToken)
@@ -517,6 +653,25 @@ namespace WebApi.IntegrationTests.Api.ExpenseReports
             Assert.NotNull(report);
 
             return report;
+        }
+
+        private static CreateExpenseRequest CreateExpenseRequestForReport() => new(
+            Date: new DateOnly(2026, 10, 15),
+            Description: "Déjeuner",
+            Amount: 25.50m,
+            BillingStreet: "20 rue du Restaurant",
+            BillingPostalCode: "69001",
+            BillingCity: "Lyon");
+
+        private static async Task<ExpenseResponse> CreateExpenseForReportAsync(HttpClient client, Guid reportId, CancellationToken token)
+        {
+            using var response = await client.PostAsJsonAsync($"/api/expense-reports/{reportId}/expenses", CreateExpenseRequestForReport(), token);
+            Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+
+            var expense = await response.Content.ReadFromJsonAsync<ExpenseResponse>(token);
+            Assert.NotNull(expense);
+
+            return expense;
         }
     }
 }

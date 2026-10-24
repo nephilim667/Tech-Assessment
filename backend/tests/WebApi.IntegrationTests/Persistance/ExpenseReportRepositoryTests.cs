@@ -6,10 +6,10 @@ using WebApi.Domain.Contracts.Expenses;
 
 using WebApi.Application.Interfaces.Common;
 using WebApi.Application.Interfaces.ExpenseReports;
-using WebApi.Application.Interfaces.Expenses;
 
 using WebApi.Infrastructure.Persistence;
 using WebApi.Infrastructure.Persistence.Mappings;
+
 using WebApi.IntegrationTests.Infrastructure;
 
 namespace WebApi.IntegrationTests.Persistance
@@ -216,6 +216,67 @@ namespace WebApi.IntegrationTests.Persistance
 
             Assert.Empty(result);
         }
+
+        [Fact]
+        public async Task DeleteAsync_After_Save_Removes_Report_And_All_Its_Expenses()
+        {
+            var token = TestContext.Current.CancellationToken;
+            var (user, report) = CreateModels();
+
+            await PersistAsync(user, report, token);
+
+            var details = new ExpenseDetails(
+                Date: new DateOnly(2026, 10, 15),
+                Description: "Déjeuner",
+                Amount: 25.50m,
+                BillingStreet: "20 rue du Restaurant",
+                BillingPostalCode: "69001",
+                BillingCity: "Lyon");
+
+            var activeExpense = Expense.Create(report, details).Value;
+            var deletedExpense = Expense.Create(report, details).Value;
+            deletedExpense.Delete();
+
+            using (var setupScope = factory.Services.CreateScope())
+            {
+                var context = setupScope.ServiceProvider
+                    .GetRequiredService<AppDbContext>();
+
+                context.Expenses.AddRange(activeExpense.ToEntity(), deletedExpense.ToEntity());
+
+                await context.SaveChangesAsync(token);
+            }
+
+            using (var operationScope = factory.Services.CreateScope())
+            {
+                var repository = operationScope.ServiceProvider.GetRequiredService<IExpenseReportRepository>();
+                var unitOfWork = operationScope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+
+                await repository.DeleteAsync(report, token);
+
+                // La suppression attend la sauvegarde de l’unité de travail.
+                using (var verificationScope = factory.Services.CreateScope())
+                {
+                    var context = verificationScope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+                    Assert.True(await context.ExpenseReports.AnyAsync(entity => entity.Id == report.Id, token));
+                    Assert.Equal(2,
+                        await context.Expenses.CountAsync(
+                            entity => entity.ExpenseReportId == report.Id,
+                            token));
+                }
+
+                await unitOfWork.SaveChangesAsync(token);
+            }
+
+            using var finalScope = factory.Services.CreateScope();
+            var finalContext = finalScope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+            Assert.False(await finalContext.ExpenseReports.AnyAsync(entity => entity.Id == report.Id, token));
+            Assert.False(await finalContext.Expenses.AnyAsync(entity => entity.ExpenseReportId == report.Id, token));
+            Assert.True(await finalContext.Beneficiaries.AnyAsync(entity => entity.Id == user.Id, token));
+        }
+
 
         // Helpers
         private async Task PersistAsync(User user, ExpenseReport report, CancellationToken cancellationToken)

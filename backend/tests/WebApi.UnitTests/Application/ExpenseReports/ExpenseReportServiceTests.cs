@@ -205,6 +205,101 @@ namespace WebApi.UnitTests.Application.ExpenseReports
                 Arg.Any<CancellationToken>());
         }
 
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public async Task DeleteAsync_Allows_Active_Or_Inactive_User(bool isActive)
+        {
+            var token = TestContext.Current.CancellationToken;
+            var user = CreateUser();
+            var report = ExpenseReport.Create(user, 2026, 10).Value;
+
+            if (!isActive)
+                user.Deactivate();
+
+            _reports.GetByIdAsync(report.Id, token).Returns(Task.FromResult<ExpenseReport?>(report));
+            _users.GetByIdForUpdateAsync(user.Id, token).Returns(Task.FromResult<User?>(user));
+
+            var result = await CreateService().DeleteAsync(report.Id, token);
+
+            Assert.True(result.IsSuccess);
+            Assert.Same(report, result.Value);
+
+            await _unitOfWork.Received(1).ExecuteInTransactionAsync(
+                Arg.Any<Func<CancellationToken, Task<Result<ExpenseReport>>>>(),
+                token);
+
+            await _users.Received(1).GetByIdForUpdateAsync(user.Id, token);
+            await _reports.Received(2).GetByIdAsync(report.Id, token);
+            await _reports.Received(1).DeleteAsync(report, token);
+            await _unitOfWork.Received(1).SaveChangesAsync(token);
+        }
+
+        [Fact]
+        public async Task DeleteAsync_When_Report_Is_Missing_Does_Not_Write()
+        {
+            var token = TestContext.Current.CancellationToken;
+            var id = Guid.NewGuid();
+
+            _reports.GetByIdAsync(id, token).Returns(Task.FromResult<ExpenseReport?>(null));
+
+            var result = await CreateService().DeleteAsync(id, token);
+
+            Assert.False(result.IsSuccess);
+            Assert.Equal("expense_report.not_found", result.Error.Code);
+
+            await _users.DidNotReceive().GetByIdForUpdateAsync(
+                Arg.Any<Guid>(),
+                Arg.Any<CancellationToken>());
+
+            await AssertNoReportDeletionAsync();
+        }
+
+        [Fact]
+        public async Task DeleteAsync_When_User_Disappears_Before_Lock_Does_Not_Write()
+        {
+            var token = TestContext.Current.CancellationToken;
+            var user = CreateUser();
+            var report = ExpenseReport.Create(user, 2026, 10).Value;
+
+            _reports.GetByIdAsync(report.Id, token).Returns(Task.FromResult<ExpenseReport?>(report));
+            _users.GetByIdForUpdateAsync(user.Id, token).Returns(Task.FromResult<User?>(null));
+
+            var result = await CreateService().DeleteAsync(report.Id, token);
+
+            Assert.False(result.IsSuccess);
+            Assert.Equal("user.not_found", result.Error.Code);
+
+            await AssertNoReportDeletionAsync();
+        }
+
+        [Fact]
+        public async Task DeleteAsync_When_Report_Disappears_During_Lock_Wait_Does_Not_Write()
+        {
+            var token = TestContext.Current.CancellationToken;
+            var user = CreateUser();
+            var report = ExpenseReport.Create(user, 2026, 10).Value;
+
+            _reports.GetByIdAsync(report.Id, token).Returns(Task.FromResult<ExpenseReport?>(report), Task.FromResult<ExpenseReport?>(null));
+            _users.GetByIdForUpdateAsync(user.Id, token).Returns(Task.FromResult<User?>(user));
+
+            var result = await CreateService().DeleteAsync(report.Id, token);
+
+            Assert.False(result.IsSuccess);
+            Assert.Equal("expense_report.not_found", result.Error.Code);
+
+            await AssertNoReportDeletionAsync();
+        }
+
+        private async Task AssertNoReportDeletionAsync()
+        {
+            await _reports.DidNotReceive().DeleteAsync(
+                Arg.Any<ExpenseReport>(),
+                Arg.Any<CancellationToken>());
+
+            await _unitOfWork.DidNotReceive().SaveChangesAsync(
+                Arg.Any<CancellationToken>());
+        }
 
         // Helpers
         private ExpenseReportService CreateService() => new(_users, _reports, _unitOfWork);

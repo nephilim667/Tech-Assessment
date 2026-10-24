@@ -12,10 +12,12 @@ using Microsoft.Extensions.DependencyInjection;
 using WebApi.Domain.Models;
 using WebApi.Application.Interfaces.Users;
 using WebApi.Application.Interfaces.Authentication;
-using WebApi.Infrastructure.Api.Expenses.Contracts;
+
 using WebApi.Infrastructure.Persistence;
 using WebApi.Infrastructure.Persistence.Mappings;
 using WebApi.Infrastructure.Persistence.Entities;
+using WebApi.Infrastructure.Api.Expenses.Contracts;
+
 using WebApi.IntegrationTests.Infrastructure;
 
 namespace WebApi.IntegrationTests.Api.Expenses
@@ -1075,6 +1077,7 @@ namespace WebApi.IntegrationTests.Api.Expenses
                 }
             }
         }
+
 
         // Helpers
         private async Task<ExpenseReport[]> PrepareReportsAsync(CancellationToken token, int quota = 5, string state = "active", int reportCount = 1)

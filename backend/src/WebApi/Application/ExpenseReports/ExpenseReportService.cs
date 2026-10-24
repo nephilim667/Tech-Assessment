@@ -56,5 +56,34 @@ namespace WebApi.Application.ExpenseReports
                 },
                 cancellationToken);
         }
+
+        public Task<Result<ExpenseReport>> DeleteAsync(Guid id, CancellationToken cancellationToken = default)
+        {
+            return unitOfWork.ExecuteInTransactionAsync(
+                async token =>
+                {
+                    var report = await reportRepository.GetByIdAsync(id, token);
+
+                    if (report is null)
+                        return Result<ExpenseReport>.Failure(ExpenseReportErrors.NotFound);
+
+                    var user = await userRepository.GetByIdForUpdateAsync(report.UserId, token);
+
+                    if (user is null)
+                        return Result<ExpenseReport>.Failure(UserErrors.NotFound);
+
+                    // Une autre opération a pu supprimer la note pendant l’attente.
+                    report = await reportRepository.GetByIdAsync(id, token);
+
+                    if (report is null)
+                        return Result<ExpenseReport>.Failure(ExpenseReportErrors.NotFound);
+
+                    await reportRepository.DeleteAsync(report, token);
+                    await unitOfWork.SaveChangesAsync(token);
+
+                    return Result<ExpenseReport>.Success(report);
+                },
+                cancellationToken);
+        }
     }
 }

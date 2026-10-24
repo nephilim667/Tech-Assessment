@@ -41,6 +41,12 @@ namespace WebApi.Infrastructure.Api.ExpenseReports
                    .Produces(StatusCodes.Status401Unauthorized)
                    .Produces(StatusCodes.Status403Forbidden);
 
+            reports.MapDelete("/{id:guid}", DeleteExpenseReportEndpoint.DeleteAsync)
+                    .Produces(StatusCodes.Status204NoContent)
+                    .ProducesProblem(StatusCodes.Status404NotFound)
+                    .Produces(StatusCodes.Status401Unauthorized)
+                    .Produces(StatusCodes.Status403Forbidden);
+
             return endpoints;
         }
     }
