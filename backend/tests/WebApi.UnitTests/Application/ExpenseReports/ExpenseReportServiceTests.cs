@@ -24,32 +24,64 @@ namespace WebApi.UnitTests.Application.ExpenseReports
         }
 
         [Fact]
-        public async Task CreateAsync_When_User_Is_Active_Persists_Report_In_Transaction()
+        public async Task CreateAsync_When_User_Is_Active_Returns_Persisted_Number()
         {
-            // Arrange
             var token = TestContext.Current.CancellationToken;
             var user = CreateUser();
 
+            ExpenseReport? addedReport = null;
+            var saved = false;
+
             _users.GetByIdForUpdateAsync(user.Id, token).Returns(Task.FromResult<User?>(user));
+            _reports.AddAsync(Arg.Any<ExpenseReport>(), token)
+                .Returns(call =>
+                {
+                    addedReport = call.ArgAt<ExpenseReport>(0);
+                    return Task.CompletedTask;
+                });
+            _unitOfWork.SaveChangesAsync(token)
+                .Returns(_ =>
+                {
+                    saved = true;
+                    return Task.CompletedTask;
+                });
+            _reports.GetByIdAsync(Arg.Any<Guid>(), token)
+                .Returns(call =>
+                {
+                    Assert.True(saved);
+                    Assert.NotNull(addedReport);
+                    Assert.Equal(addedReport.Id, call.ArgAt<Guid>(0));
 
-            var service = CreateService();
+                    var persisted = ExpenseReport.Restore(
+                        id: addedReport.Id,
+                        userId: addedReport.UserId,
+                        title: addedReport.Title,
+                        year: addedReport.Year,
+                        month: addedReport.Month,
+                        number: 42);
 
-            // Act
-            var result = await service.CreateAsync(user.Id, 2026, 10, token);
+                    return Task.FromResult<ExpenseReport?>(persisted);
+                });
 
-            // Assert
+            var result = await CreateService().CreateAsync(user.Id, 2026, 10, token);
+
             Assert.True(result.IsSuccess);
             Assert.Equal(user.Id, result.Value.UserId);
             Assert.Equal(2026, result.Value.Year);
             Assert.Equal(10, result.Value.Month);
+            Assert.Equal(42, result.Value.Number);
 
-            await _unitOfWork.Received(1).ExecuteInTransactionAsync(
-                    Arg.Any<Func<CancellationToken, Task<Result<ExpenseReport>>>>(),
-                    token);
+            await _reports.Received(1).AddAsync(
+                Arg.Is<ExpenseReport>(report =>
+                    report.Id == result.Value.Id &&
+                    report.Number == 0),
+                token);
 
-            await _users.Received(1).GetByIdForUpdateAsync(user.Id, token);
-            await _reports.Received(1).AddAsync(result.Value, token);
             await _unitOfWork.Received(1).SaveChangesAsync(token);
+            await _reports.Received(1).GetByIdAsync(result.Value.Id, token);
+            await _unitOfWork.Received(1).ExecuteInTransactionAsync(
+                Arg.Any<Func<CancellationToken, Task<Result<ExpenseReport>>>>(),
+                token);
         }
 
         [Fact]

@@ -100,11 +100,7 @@
             @for (report of store.reports(); track report.id) {
               <tr>
                 <td>{{ report.title }}</td>
-                <td>
-                  <code class="report-reference" [title]="report.reference">
-                    {{ report.reference }}
-                  </code>
-                </td>
+                <td>{{ report.reference }}</td>
                 <td>
                   <button type="button" class="button-danger" [disabled]="isBusy()" (click)="deleteReport(report)">
                     Supprimer

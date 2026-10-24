@@ -99,6 +99,71 @@ namespace WebApi.IntegrationTests.Persistance
             Assert.Equal(expectedConstraint, postgresException.ConstraintName);
         }
 
+        [Fact]
+        public async Task SaveChangesAsync_Generates_Unique_Numbers_Across_Users()
+        {
+            var token = TestContext.Current.CancellationToken;
+
+            using var scope = factory.Services.CreateScope();
+            var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+            var firstUser = CreateUser();
+            var secondUser = CreateUser();
+
+            context.Beneficiaries.AddRange(firstUser.ToEntity(), secondUser.ToEntity());
+            await context.SaveChangesAsync(token);
+
+            var firstReport = ExpenseReport.Create(firstUser, 2026, 10).Value.ToEntity();
+            var secondReport = ExpenseReport.Create(secondUser, 2026, 10).Value.ToEntity();
+
+            context.ExpenseReports.AddRange(firstReport, secondReport);
+
+            await context.SaveChangesAsync(token);
+
+            Assert.True(firstReport.Number > 0);
+            Assert.True(secondReport.Number > 0);
+            Assert.NotEqual(firstReport.Number, secondReport.Number);
+
+            context.ChangeTracker.Clear();
+
+            var persisted = await context.ExpenseReports
+                .AsNoTracking()
+                .SingleAsync(report => report.Id == firstReport.Id, token);
+
+            Assert.Equal(firstReport.Number, persisted.Number);
+        }
+
+        [Fact]
+        public async Task SaveChangesAsync_Does_Not_Reuse_A_Deleted_Report_Number()
+        {
+            var token = TestContext.Current.CancellationToken;
+
+            using var scope = factory.Services.CreateScope();
+            var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+            var user = CreateUser();
+
+            context.Beneficiaries.Add(user.ToEntity());
+            await context.SaveChangesAsync(token);
+
+            var firstReport = ExpenseReport.Create(user, 2026, 10).Value.ToEntity();
+
+            context.ExpenseReports.Add(firstReport);
+            await context.SaveChangesAsync(token);
+
+            var deletedNumber = firstReport.Number;
+
+            context.ExpenseReports.Remove(firstReport);
+            await context.SaveChangesAsync(token);
+
+            var secondReport = ExpenseReport.Create(user, 2026, 10).Value.ToEntity();
+
+            context.ExpenseReports.Add(secondReport);
+            await context.SaveChangesAsync(token);
+
+            Assert.True(secondReport.Number > deletedNumber);
+        }
+
         private static User CreateUser() =>
             User.Create(
                 "Juste",

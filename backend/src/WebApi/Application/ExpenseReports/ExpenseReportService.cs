@@ -52,7 +52,12 @@ namespace WebApi.Application.ExpenseReports
                     await reportRepository.AddAsync(result.Value, token);
                     await unitOfWork.SaveChangesAsync(token);
 
-                    return result;
+                    var persisted = await reportRepository.GetByIdAsync(result.Value.Id, token);
+
+                    if (persisted is null)
+                        throw new InvalidOperationException("La note de frais sauvegardée ne peut pas être relue.");
+
+                    return Result<ExpenseReport>.Success(persisted);
                 },
                 cancellationToken);
         }

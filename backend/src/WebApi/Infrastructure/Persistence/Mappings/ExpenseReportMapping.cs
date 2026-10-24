@@ -13,7 +13,8 @@ namespace WebApi.Infrastructure.Persistence.Mappings
                 UserId = report.UserId,
                 Title = report.Title,
                 Year = report.Year,
-                Month = report.Month
+                Month = report.Month,
+                Number = report.Number,
             };
         }
 
@@ -24,7 +25,8 @@ namespace WebApi.Infrastructure.Persistence.Mappings
                 userId: entity.UserId,
                 title: entity.Title,
                 year: entity.Year,
-                month: entity.Month);
+                month: entity.Month,
+                number: entity.Number);
         }
     }
 }

@@ -6,6 +6,6 @@ namespace WebApi.Infrastructure.Api.ExpenseReports.Mappings
     internal static class ExpenseReportResponseMappings
     {
         public static ExpenseReportResponse ToResponse(this ExpenseReport report) =>
-            new(report.Id, report.UserId, report.Title, report.Year, report.Month);
+            new(report.Id, report.UserId, report.Title, report.Year, report.Month, report.Number);
     }
 }

@@ -31,6 +31,9 @@ internal sealed class AppDbContext(DbContextOptions<AppDbContext> options) : Ide
                   .WithMany()
                   .HasForeignKey(report => report.UserId)
                   .OnDelete(DeleteBehavior.Restrict);
+
+            entity.Property(report => report.Number)
+                  .UseIdentityAlwaysColumn();
         });
 
         builder.Entity<ExpenseEntity>(entity =>

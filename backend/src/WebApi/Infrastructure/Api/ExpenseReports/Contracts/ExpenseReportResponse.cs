@@ -1,7 +1,7 @@
 ﻿namespace WebApi.Infrastructure.Api.ExpenseReports.Contracts
 {
-    internal sealed record ExpenseReportResponse(Guid Id, Guid UserId, string Title, int Year, int Month)
+    internal sealed record ExpenseReportResponse(Guid Id, Guid UserId, string Title, int Year, int Month, int Number)
     {
-        public string Reference => Id.ToString("D");
+        public string Reference => $"Note {Number}";
     }
 }

@@ -30,6 +30,8 @@ namespace WebApi.UnitTests.Infrastructure.Persistence
             Assert.Equal(report.Title, entity.Title);
             Assert.Equal(report.Year, entity.Year);
             Assert.Equal(report.Month, entity.Month);
+            Assert.Equal(0, report.Number);
+            Assert.Equal(report.Number, entity.Number);
         }
 
         [Fact]
@@ -42,7 +44,8 @@ namespace WebApi.UnitTests.Infrastructure.Persistence
                 UserId = Guid.NewGuid(),
                 Title = "Intitulé historique conservé",
                 Year = 2026,
-                Month = 10
+                Month = 10,
+                Number = 42
             };
 
             // Act
@@ -54,6 +57,26 @@ namespace WebApi.UnitTests.Infrastructure.Persistence
             Assert.Equal(entity.Title, report.Title);
             Assert.Equal(entity.Year, report.Year);
             Assert.Equal(entity.Month, report.Month);
+            Assert.Equal(entity.Number, report.Number);
+        }
+
+        [Fact]
+        public void ToEntity_Preserves_An_Assigned_Report_Number()
+        {
+            // Arrange
+            var report = ExpenseReport.Restore(
+                id: Guid.NewGuid(),
+                userId: Guid.NewGuid(),
+                title: "Intitulé historique conservé",
+                year: 2026,
+                month: 10,
+                number: 42);
+
+            // Act
+            var entity = report.ToEntity();
+
+            // Assert
+            Assert.Equal(42, entity.Number);
         }
     }
 }

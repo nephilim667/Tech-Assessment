@@ -29,15 +29,6 @@
   margin-top: 1.5rem;
 }
 
-.report-reference {
-  display: inline-block;
-  max-width: 14ch;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  vertical-align: middle;
-}
-
 @media (max-width: 650px) {
   .report-filters {
     grid-template-columns: 1fr;

@@ -38,6 +38,8 @@ namespace WebApi.IntegrationTests.Api.ExpenseReports
             var report = await response.Content.ReadFromJsonAsync<ExpenseReportResponse>(token);
 
             Assert.NotNull(report);
+            Assert.True(report.Number > 0);
+            Assert.Equal($"Note {report.Number}", report.Reference);
             Assert.NotEqual(Guid.Empty, report.Id);
             Assert.Equal(userId, report.UserId);
             Assert.Equal("Juste Leblanc - Octobre 2026", report.Title);
@@ -51,6 +53,7 @@ namespace WebApi.IntegrationTests.Api.ExpenseReports
                 .AsNoTracking()
                 .SingleAsync(entity => entity.Id == report.Id, token);
 
+            Assert.Equal(persisted.Number, report.Number);
             Assert.Equal(report.UserId, persisted.UserId);
             Assert.Equal(report.Title, persisted.Title);
             Assert.Equal(report.Year, persisted.Year);
@@ -635,10 +638,16 @@ namespace WebApi.IntegrationTests.Api.ExpenseReports
             var firstReference = createdJson.RootElement.GetProperty("reference").GetString();
 
             var firstTitle = createdJson.RootElement.GetProperty("title").GetString();
-            Assert.Equal(firstId.ToString("D"), firstReference);
+            var firstNumber = createdJson.RootElement.GetProperty("number").GetInt32();
+
+            Assert.True(firstNumber > 0);
+            Assert.Equal($"Note {firstNumber}", firstReference);
 
             var second = await CreateReportForListAsync(client, userId, 2026, 10, token);
 
+            Assert.True(second.Number > 0);
+            Assert.NotEqual(firstNumber, second.Number);
+            Assert.Equal($"Note {second.Number}", second.Reference);
             Assert.Equal(firstTitle, second.Title);
             Assert.NotEqual(firstReference, second.Reference);
 
@@ -694,6 +703,8 @@ namespace WebApi.IntegrationTests.Api.ExpenseReports
 
             var report = await response.Content.ReadFromJsonAsync<ExpenseReportResponse>(token);
             Assert.NotNull(report);
+            Assert.True(report.Number > 0);
+            Assert.Equal($"Note {report.Number}", report.Reference);
 
             return report;
         }

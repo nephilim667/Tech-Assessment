@@ -274,6 +274,12 @@ namespace WebApi.Infrastructure.Persistence.Migrations
                     b.Property<int>("Month")
                         .HasColumnType("integer");
 
+                    b.Property<int>("Number")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityAlwaysColumn(b.Property<int>("Number"));
+
                     b.Property<string>("Title")
                         .IsRequired()
                         .HasColumnType("text");
@@ -285,6 +291,9 @@ namespace WebApi.Infrastructure.Persistence.Migrations
                         .HasColumnType("integer");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("Number")
+                        .IsUnique();
 
                     b.HasIndex("UserId", "Year", "Month");
 

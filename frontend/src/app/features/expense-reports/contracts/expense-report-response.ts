@@ -5,4 +5,5 @@ export interface ExpenseReportResponse {
   year: number;
   month: number;
   reference: string;
+  number: number;
 }

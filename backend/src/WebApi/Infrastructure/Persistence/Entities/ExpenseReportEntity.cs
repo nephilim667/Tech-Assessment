@@ -7,6 +7,7 @@ namespace WebApi.Infrastructure.Persistence.Entities
 {
     [Table("expense_reports")]
     [Index(nameof(UserId), nameof(Year), nameof(Month))]
+    [Index(nameof(Number), IsUnique = true)]
     internal sealed class ExpenseReportEntity
     {
         [Key]
@@ -20,5 +21,7 @@ namespace WebApi.Infrastructure.Persistence.Entities
         public int Year { get; set; }
 
         public int Month { get; set; }
+
+        public int Number { get; set; }
     }
 }

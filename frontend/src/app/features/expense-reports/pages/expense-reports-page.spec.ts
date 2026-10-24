@@ -32,7 +32,8 @@ describe('ExpenseReportsPage', () => {
     title: 'Juste Leblanc - Octobre 2026',
     year: 2026,
     month: 10,
-    reference: '05631031-9ff0-4bd5-9c2d-03f2f7879efe',
+    number: 42,
+    reference: 'Note 42',
   };
 
   let fixture: ComponentFixture<ExpenseReportsPage>;
