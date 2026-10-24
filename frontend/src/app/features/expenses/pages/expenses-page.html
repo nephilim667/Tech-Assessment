@@ -1,0 +1,144 @@
+<p>
+  <a routerLink="/expense-reports">Retour aux notes de frais</a>
+</p>
+
+@if (store.error(); as error) {
+  <p class="error" role="alert">{{ error }}</p>
+}
+
+@if (store.isLoading()) {
+  <p role="status">Chargement des dépenses…</p>
+}
+
+@if (store.report(); as report) {
+  <h2>{{ report.reference }} — {{ report.title }}</h2>
+
+  <div class="expenses-layout">
+    <section class="card">
+      @if (editing()) {
+        <section class="transfer-search">
+          <h3>Rechercher une note de destination</h3>
+
+          <p>
+            Pour un transfert, sélectionnez la période de destination,
+            puis choisissez la note dans le formulaire.
+          </p>
+
+          <form [formGroup]="destinationForm" (change)="loadDestinations()" (ngSubmit)="loadDestinations()">
+            <fieldset [disabled]="isBusy()">
+              <div class="transfer-period">
+                <div class="field">
+                  <label for="destination-month">Mois</label>
+                  <select id="destination-month" formControlName="month">
+                    @for (month of months; track month.value) {
+                      <option [ngValue]="month.value">{{ month.label }}</option>
+                    }
+                  </select>
+                </div>
+
+                <div class="field">
+                  <label for="destination-year">Année</label>
+                  <input id="destination-year" type="number" min="1" max="9999" step="1" formControlName="year" />
+                </div>
+              </div>
+            </fieldset>
+          </form>
+
+          @if (destinationForm.invalid) {
+            <p class="error">Saisissez un mois entre 1 et 12 et une année entre 1 et 9999.</p>
+          }
+
+          @if (destinationsStore.isLoading()) {
+            <p role="status">Recherche des notes de destination…</p>
+          }
+
+          @if (destinationsStore.error(); as error) {
+            <p class="error" role="alert">{{ error }}</p>
+          }
+
+          @if (destinationsStore.period() && destinationsStore.reports().length === 0) {
+            <p>Aucune note trouvée pour cette période.</p>
+          }
+        </section>
+      }
+
+      <app-expense-form [report]="report" [expense]="editing()" [destinations]="destinationsStore.reports()" [isSaving]="isBusy()"
+                        (submitted)="save($event)" (cancelled)="cancelEdit()" />
+    </section>
+
+    <section class="card">
+      <div class="section-heading">
+        <h3>Dépenses de la note</h3>
+
+        <button type="button" [disabled]="isBusy()" (click)="store.refresh()">
+          Actualiser
+        </button>
+      </div>
+
+      @if (store.page(); as page) {
+        <div class="expense-summary">
+          <p>Nombre de dépenses :<strong>{{ page.totalCount }}</strong></p>
+          <p>Total de la note : <strong>{{ page.totalAmount | currency:'EUR' }}</strong></p>
+        </div>
+
+        @if (page.items.length === 0) {
+          <p>Aucune dépense à afficher.</p>
+        } 
+        @else {
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">Date</th>
+                  <th scope="col">Description</th>
+                  <th scope="col">Montant</th>
+                  <th scope="col">Actions</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                @for (expense of page.items; track expense.id) {
+                  <tr>
+                    <td>{{ expense.date | date:'dd/MM/yyyy' }}</td>
+                    <td>{{ expense.description }}</td>
+                    <td>{{ expense.amount | currency:'EUR' }}</td>
+                    <td>
+                      <div class="actions">
+                        <button type="button" [disabled]="isBusy()" (click)="editExpense(expense)">
+                          Modifier
+                        </button>
+                        <button type="button" class="button-danger" [disabled]="isBusy()" (click)="deleteExpense(expense)">
+                          Supprimer
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+
+        <nav class="expense-pagination" aria-label="Pagination des dépenses">
+          <button type="button" [disabled]="isBusy() || page.pageNumber <= 1" (click)="store.goToPage(page.pageNumber - 1)">
+            Précédente
+          </button>
+
+          <span>
+            Page {{ page.pageNumber }} / {{ page.totalPages || 1 }}
+          </span>
+
+          <button type="button" [disabled]="isBusy() || page.pageNumber >= page.totalPages" (click)="store.goToPage(page.pageNumber + 1)">
+            Suivante
+          </button>
+        </nav>
+      } 
+      @else if (!isBusy()) {
+        <p>
+          Les dépenses ne sont pas chargées.
+          Utilisez « Actualiser » pour réessayer.
+        </p>
+      }
+    </section>
+  </div>
+}

@@ -1,13 +1,15 @@
 import { Component, inject, OnInit } from '@angular/core';
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators} from '@angular/forms';
+import { RouterLink } from '@angular/router';
 
 import { UsersStore } from '../../users/store/users-store';
 import { ExpenseReportResponse } from '../contracts/expense-report-response';
 import { ExpenseReportsStore } from '../store/expense-reports-store';
+import { MONTHS } from '../../../shared/constants/months';
 
 @Component({
   selector: 'app-expense-reports-page',
-  imports: [ReactiveFormsModule],
+  imports: [ReactiveFormsModule, RouterLink],
   providers: [UsersStore, ExpenseReportsStore],
   templateUrl: './expense-reports-page.html',
   styleUrl: '../expense-reports-styles.css',
@@ -17,6 +19,7 @@ export class ExpenseReportsPage implements OnInit {
 
   readonly usersStore = inject(UsersStore);
   readonly store = inject(ExpenseReportsStore);
+  readonly months = MONTHS;
 
   private readonly today = new Date();
 

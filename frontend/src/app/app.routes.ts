@@ -25,6 +25,13 @@ export const appRoutes: Routes = [
       import('./features/expense-reports/pages/expense-reports-page')
         .then((module) => module.ExpenseReportsPage),
   },
+  {
+    path: 'expense-reports/:expenseReportId',
+    canActivate: [authenticationGuard],
+    loadComponent: () =>
+      import('./features/expenses/pages/expenses-page')
+        .then((module) => module.ExpensesPage),
+  },
   { path: '', pathMatch: 'full', redirectTo: 'users' },
   { path: '**', redirectTo: 'users' },
 ];

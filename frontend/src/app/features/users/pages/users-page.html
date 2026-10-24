@@ -1,4 +1,4 @@
-<h2>Utilisateurs administrés</h2>
+<h2>Administrés</h2>
 
 @if (store.error(); as error) {
   <p class="error" role="alert">{{ error }}</p>
@@ -6,7 +6,7 @@
 
 <div class="users-layout">
   <section class="card">
-    <h3>Créer un utilisateur</h3>
+    <h3>Créer un administré</h3>
 
     <form [formGroup]="form" (ngSubmit)="submit()">
       <fieldset [disabled]="store.isSaving() || store.isLoading()">
@@ -14,16 +14,8 @@
           <div class="field">
             <label [for]="field.name">{{ field.label }}</label>
 
-            <input
-              [id]="field.name"
-              type="text"
-              [formControlName]="field.name"
-              [attr.autocomplete]="field.autocomplete"
-              [attr.aria-invalid]="
-                form.controls[field.name].touched &&
-                form.controls[field.name].invalid
-              "
-            />
+            <input [id]="field.name" type="text" [formControlName]="field.name" [attr.autocomplete]="field.autocomplete"
+                   [attr.aria-invalid]="form.controls[field.name].touched && form.controls[field.name].invalid"/>
 
             @if (form.controls[field.name].touched && form.controls[field.name].invalid) {
               <small class="error">
@@ -47,7 +39,7 @@
         </div>
 
         <button type="submit" [disabled]="form.invalid || store.isSaving() || store.isLoading()">
-          Créer l’utilisateur
+          Créer un administré
         </button>
       </fieldset>
     </form>
@@ -55,7 +47,7 @@
 
   <section class="card" [attr.aria-busy]="store.isLoading()">
     <div class="section-heading">
-      <h3>Liste des utilisateurs</h3>
+      <h3>Liste des administrés</h3>
 
       <button type="button" [disabled]="store.isLoading() || store.isSaving()" (click)="store.load()">
         Actualiser
@@ -63,11 +55,11 @@
     </div>
 
     @if (store.isLoading()) {
-      <p role="status">Chargement des utilisateurs…</p>
+      <p role="status">Chargement des administrés…</p>
     }
 
     @if (!store.isLoading() && store.users().length === 0) {
-      <p>Aucun utilisateur à afficher.</p>
+      <p>Aucun administré à afficher.</p>
     }
 
     @if (store.users().length > 0) {

@@ -1,5 +1,6 @@
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
 
 import { UserResponse } from '../../users/contracts/user-response';
 import { UsersStore } from '../../users/store/users-store';
@@ -80,6 +81,7 @@ describe('ExpenseReportsPage', () => {
 
     await TestBed.configureTestingModule({
       imports: [ExpenseReportsPage],
+      providers: [provideRouter([])],
     })
       .overrideComponent(ExpenseReportsPage, {
         set: {

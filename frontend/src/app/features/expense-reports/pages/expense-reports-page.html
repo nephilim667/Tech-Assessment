@@ -21,10 +21,10 @@
     <fieldset [disabled]="isBusy() || usersStore.isLoading()">
       <div class="report-filters">
         <div class="field">
-          <label for="report-user">Bénéficiaire</label>
+          <label for="report-user">Administré</label>
 
           <select id="report-user" formControlName="userId" aria-describedby="report-user-error">
-            <option value="">Sélectionner un bénéficiaire</option>
+            <option value="">Sélectionner un administré</option>
 
             @for (user of usersStore.users(); track user.id) {
               <option [value]="user.id">
@@ -36,7 +36,7 @@
 
           <small id="report-user-error" class="field-message">
             @if (form.controls.userId.touched && form.controls.userId.invalid) {
-              Sélectionnez un bénéficiaire.
+              Sélectionner un administré.
             }
           </small>
         </div>
@@ -44,7 +44,11 @@
         <div class="field">
           <label for="report-month">Mois</label>
 
-          <input id="report-month" type="number" min="1" max="12" step="1" formControlName="month" aria-describedby="report-month-error" />
+          <select id="report-month" formControlName="month">
+            @for (month of months; track month.value) {
+              <option [ngValue]="month.value">{{ month.label }}</option>
+            }
+          </select>
           <small id="report-month-error" class="field-message">
             @if (form.controls.month.touched && form.controls.month.invalid) {
               Saisissez un mois entier entre 1 et 12.
@@ -75,7 +79,7 @@
   <section class="card report-results">
     <div class="section-heading">
       <h3>
-        {{ displayedUserName() }} — {{ period.month }}/{{ period.year }}
+        {{ displayedUserName() }} — {{ months[period.month - 1].label }} {{ period.year }}
       </h3>
 
       <button type="button" [disabled]="!canCreate()" (click)="createReport()">
@@ -102,9 +106,12 @@
                 <td>{{ report.title }}</td>
                 <td>{{ report.reference }}</td>
                 <td>
-                  <button type="button" class="button-danger" [disabled]="isBusy()" (click)="deleteReport(report)">
-                    Supprimer
-                  </button>
+                  <div class="actions">
+                    <a [routerLink]="['/expense-reports', report.id]">Dépenses</a>
+                    <button type="button" class="button-danger" [disabled]="isBusy()" (click)="deleteReport(report)">
+                      Supprimer
+                    </button>
+                  </div>
                 </td>
               </tr>
             }
