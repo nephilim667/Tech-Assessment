@@ -1,0 +1,120 @@
+<h2>Notes de frais</h2>
+
+@if (usersStore.error(); as error) {
+  <div role="alert">
+    <p class="error">{{ error }}</p>
+
+    <button type="button" [disabled]="usersStore.isLoading()" (click)="usersStore.load()">
+      Recharger les utilisateurs
+    </button>
+  </div>
+}
+
+@if (store.error(); as error) {
+  <p class="error" role="alert">{{ error }}</p>
+}
+
+<section class="card">
+  <h3>Sélectionner une période</h3>
+
+  <form [formGroup]="form" (change)="search()" (ngSubmit)="search()">
+    <fieldset [disabled]="isBusy() || usersStore.isLoading()">
+      <div class="report-filters">
+        <div class="field">
+          <label for="report-user">Bénéficiaire</label>
+
+          <select id="report-user" formControlName="userId" aria-describedby="report-user-error">
+            <option value="">Sélectionner un bénéficiaire</option>
+
+            @for (user of usersStore.users(); track user.id) {
+              <option [value]="user.id">
+                {{ user.firstName }} {{ user.lastName }}
+                {{ user.isActive ? '' : '— Inactif' }}
+              </option>
+            }
+          </select>
+
+          <small id="report-user-error" class="field-message">
+            @if (form.controls.userId.touched && form.controls.userId.invalid) {
+              Sélectionnez un bénéficiaire.
+            }
+          </small>
+        </div>
+
+        <div class="field">
+          <label for="report-month">Mois</label>
+
+          <input id="report-month" type="number" min="1" max="12" step="1" formControlName="month" aria-describedby="report-month-error" />
+          <small id="report-month-error" class="field-message">
+            @if (form.controls.month.touched && form.controls.month.invalid) {
+              Saisissez un mois entier entre 1 et 12.
+            }
+          </small>
+        </div>
+
+        <div class="field">
+          <label for="report-year">Année</label>
+
+          <input id="report-year" type="number" min="1" max="9999" step="1" formControlName="year" aria-describedby="report-year-error" />
+          <small id="report-year-error" class="field-message">
+            @if (form.controls.year.touched && form.controls.year.invalid) {
+              Saisissez une année entière entre 1 et 9999.
+            }
+          </small>
+        </div>
+      </div>
+    </fieldset>
+  </form>
+</section>
+
+@if (store.isLoading()) {
+  <p role="status">Chargement des notes de frais…</p>
+}
+
+@if (store.period(); as period) {
+  <section class="card report-results">
+    <div class="section-heading">
+      <h3>
+        {{ displayedUserName() }} — {{ period.month }}/{{ period.year }}
+      </h3>
+
+      <button type="button" [disabled]="!canCreate()" (click)="createReport()">
+        Créer une note
+      </button>
+    </div>
+
+    @if (store.reports().length === 0) {
+      <p>Aucune note de frais pour cette période.</p>
+    } @else {
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Intitulé</th>
+              <th scope="col">Référence</th>
+              <th scope="col">Actions</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            @for (report of store.reports(); track report.id) {
+              <tr>
+                <td>{{ report.title }}</td>
+                <td>
+                  <code class="report-reference" [title]="report.reference">
+                    {{ report.reference }}
+                  </code>
+                </td>
+                <td>
+                  <button type="button" class="button-danger" [disabled]="isBusy()" (click)="deleteReport(report)">
+                    Supprimer
+                  </button>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </section>
+}

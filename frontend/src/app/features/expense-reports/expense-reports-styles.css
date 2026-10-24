@@ -1,0 +1,45 @@
+.report-filters {
+  display: grid;
+  grid-template-columns:
+    minmax(220px, 2fr)
+    repeat(2, minmax(100px, 1fr));
+  gap: 1rem;
+  align-items: start;
+}
+
+.report-filters .field {
+  min-width: 0;
+  align-content: start;
+  margin-bottom: 0;
+}
+
+.report-filters input,
+.report-filters select {
+  height: 2.75rem;
+}
+
+.field-message {
+  display: block;
+  min-height: 2.5rem;
+  line-height: 1.25rem;
+  color: #a51d26;
+}
+
+.report-results {
+  margin-top: 1.5rem;
+}
+
+.report-reference {
+  display: inline-block;
+  max-width: 14ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+@media (max-width: 650px) {
+  .report-filters {
+    grid-template-columns: 1fr;
+  }
+}

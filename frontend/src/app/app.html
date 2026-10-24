@@ -4,6 +4,7 @@
   @if (auth.hasSession()) {
     <nav aria-label="Navigation principale">
       <a routerLink="/users">Utilisateurs</a>
+      <a routerLink="/expense-reports">Notes de frais</a>
 
       <button type="button" (click)="logout()" [disabled]="auth.isPending()">
         {{ auth.isPending() ? 'Patientez…' : 'Se déconnecter' }}
