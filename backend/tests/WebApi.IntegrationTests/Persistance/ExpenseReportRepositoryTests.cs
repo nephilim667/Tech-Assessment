@@ -117,6 +117,106 @@ namespace WebApi.IntegrationTests.Persistance
             Assert.Null(result);
         }
 
+        [Fact]
+        public async Task GetByUserAndPeriodAsync_Filters_User_Year_And_Month()
+        {
+            var token = TestContext.Current.CancellationToken;
+
+            var (user, first) = CreateModels();
+            var (otherUser, otherUserReport) = CreateModels();
+
+            await PersistAsync(user, first, token);
+            await PersistAsync(otherUser, otherUserReport, token);
+
+            var second = ExpenseReport.Restore(Guid.NewGuid(), user.Id, first.Title, 2026, 10);
+            var otherMonth = ExpenseReport.Restore(Guid.NewGuid(), user.Id, "Autre mois", 2026, 9);
+            var otherYear = ExpenseReport.Restore(Guid.NewGuid(), user.Id, "Autre année", 2025, 10);
+
+            using (var setupScope = factory.Services.CreateScope())
+            {
+                var context = setupScope.ServiceProvider
+                    .GetRequiredService<AppDbContext>();
+
+                context.ExpenseReports.AddRange(
+                    second.ToEntity(),
+                    otherMonth.ToEntity(),
+                    otherYear.ToEntity());
+
+                await context.SaveChangesAsync(token);
+            }
+
+            using var scope = factory.Services.CreateScope();
+            var repository = scope.ServiceProvider.GetRequiredService<IExpenseReportRepository>();
+
+            var result = await repository.GetByUserAndPeriodAsync(user.Id, 2026, 10, token);
+
+            Assert.Equal(2, result.Count);
+
+            Assert.Equal(
+                new[] { first.Id, second.Id }.OrderBy(id => id).ToArray(),
+                result.Select(report => report.Id).ToArray());
+
+            Assert.All(result, report =>
+            {
+                Assert.Equal(user.Id, report.UserId);
+                Assert.Equal(2026, report.Year);
+                Assert.Equal(10, report.Month);
+            });
+        }
+
+        [Theory]
+        [InlineData(true, false)]
+        [InlineData(false, false)]
+        [InlineData(false, true)]
+        public async Task GetByUserAndPeriodAsync_Applies_User_Visibility(bool isActive, bool isDeleted)
+        {
+            var token = TestContext.Current.CancellationToken;
+            var (user, report) = CreateModels();
+
+            if (isDeleted)
+                user.Delete();
+            else if (!isActive)
+                user.Deactivate();
+
+            await PersistAsync(user, report, token);
+
+            using var scope = factory.Services.CreateScope();
+            var repository = scope.ServiceProvider.GetRequiredService<IExpenseReportRepository>();
+            var result = await repository.GetByUserAndPeriodAsync(user.Id, report.Year, report.Month, token);
+
+            if (isDeleted)
+            {
+                Assert.Empty(result);
+            }
+            else
+            {
+                var returned = Assert.Single(result);
+
+                Assert.Equal(report.Id, returned.Id);
+                Assert.Equal(report.Title, returned.Title);
+                Assert.Equal(report.UserId, returned.UserId);
+                Assert.Equal(report.Year, returned.Year);
+                Assert.Equal(report.Month, returned.Month);
+            }
+
+            var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+            Assert.True(await context.ExpenseReports
+                .AnyAsync(entity => entity.Id == report.Id, token));
+        }
+
+        [Fact]
+        public async Task GetByUserAndPeriodAsync_When_User_Does_Not_Exist_Returns_Empty_List()
+        {
+            var token = TestContext.Current.CancellationToken;
+
+            using var scope = factory.Services.CreateScope();
+            var repository = scope.ServiceProvider.GetRequiredService<IExpenseReportRepository>();
+            var result = await repository.GetByUserAndPeriodAsync(Guid.NewGuid(), 2026, 10, token);
+
+            Assert.Empty(result);
+        }
+
         // Helpers
         private async Task PersistAsync(User user, ExpenseReport report, CancellationToken cancellationToken)
         {

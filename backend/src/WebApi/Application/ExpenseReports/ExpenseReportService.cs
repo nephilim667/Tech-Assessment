@@ -19,6 +19,21 @@ namespace WebApi.Application.ExpenseReports
                 : Result<ExpenseReport>.Success(report);
         }
 
+        public async Task<Result<IReadOnlyList<ExpenseReport>>> GetByUserAndPeriodAsync(Guid userId, int year, int month, CancellationToken cancellationToken = default)
+        {
+            if (year is < 1 or > 9999 || month is < 1 or > 12)
+                return Result<IReadOnlyList<ExpenseReport>>.Failure(ExpenseReportErrors.InvalidPeriod);
+
+            var user = await userRepository.GetByIdAsync(userId, cancellationToken);
+
+            if (user is null)
+                return Result<IReadOnlyList<ExpenseReport>>.Failure(UserErrors.NotFound);
+
+            var reports = await reportRepository.GetByUserAndPeriodAsync(userId, year, month, cancellationToken);
+
+            return Result<IReadOnlyList<ExpenseReport>>.Success(reports);
+        }
+
         public Task<Result<ExpenseReport>> CreateAsync(Guid userId, int year, int month, CancellationToken cancellationToken = default)
         {
             return unitOfWork.ExecuteInTransactionAsync(

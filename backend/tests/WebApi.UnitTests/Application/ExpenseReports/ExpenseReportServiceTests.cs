@@ -135,6 +135,77 @@ namespace WebApi.UnitTests.Application.ExpenseReports
             Assert.Equal("expense_report.not_found", result.Error.Code);
         }
 
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public async Task GetByUserAndPeriodAsync_Allows_Active_Or_Inactive_User(bool isActive)
+        {
+            var token = TestContext.Current.CancellationToken;
+            var user = CreateUser();
+            var report = ExpenseReport.Create(user, 2026, 10).Value;
+
+            if (!isActive)
+                user.Deactivate();
+
+            IReadOnlyList<ExpenseReport> expected = [report];
+
+            _users.GetByIdAsync(user.Id, token).Returns(Task.FromResult<User?>(user));
+            _reports.GetByUserAndPeriodAsync(user.Id, 2026, 10, token).Returns(Task.FromResult(expected));
+
+            var result = await CreateService().GetByUserAndPeriodAsync(user.Id, 2026, 10, token);
+
+            Assert.True(result.IsSuccess);
+            Assert.Same(expected, result.Value);
+
+            await _reports.Received(1).GetByUserAndPeriodAsync(user.Id, 2026, 10, token);
+        }
+
+        [Fact]
+        public async Task GetByUserAndPeriodAsync_When_User_Is_Missing_Returns_NotFound()
+        {
+            var token = TestContext.Current.CancellationToken;
+            var userId = Guid.NewGuid();
+
+            _users.GetByIdAsync(userId, token).Returns(Task.FromResult<User?>(null));
+
+            var result = await CreateService().GetByUserAndPeriodAsync(userId, 2026, 10, token);
+
+            Assert.False(result.IsSuccess);
+            Assert.Equal("user.not_found", result.Error.Code);
+
+            await _reports.DidNotReceive().GetByUserAndPeriodAsync(
+                Arg.Any<Guid>(),
+                Arg.Any<int>(),
+                Arg.Any<int>(),
+                Arg.Any<CancellationToken>());
+        }
+
+        [Theory]
+        [InlineData(0, 10)]
+        [InlineData(10000, 10)]
+        [InlineData(2026, 0)]
+        [InlineData(2026, 13)]
+        public async Task GetByUserAndPeriodAsync_When_Period_Is_Invalid_Does_Not_Query(int year, int month)
+        {
+            var token = TestContext.Current.CancellationToken;
+
+            var result = await CreateService().GetByUserAndPeriodAsync(Guid.NewGuid(), year, month, token);
+
+            Assert.False(result.IsSuccess);
+            Assert.Equal("expense_report.invalid_period", result.Error.Code);
+
+            await _users.DidNotReceive().GetByIdAsync(
+                Arg.Any<Guid>(),
+                Arg.Any<CancellationToken>());
+
+            await _reports.DidNotReceive().GetByUserAndPeriodAsync(
+                Arg.Any<Guid>(),
+                Arg.Any<int>(),
+                Arg.Any<int>(),
+                Arg.Any<CancellationToken>());
+        }
+
+
         // Helpers
         private ExpenseReportService CreateService() => new(_users, _reports, _unitOfWork);
 

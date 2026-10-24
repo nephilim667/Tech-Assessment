@@ -61,9 +61,10 @@ internal static class DependencyInjectionExtensions
         services.AddScoped<IValidator<SetUserStatusRequest>, SetUserStatusRequestValidator>();
         services.AddScoped<IValidator<AuthenticationRequest>, AuthenticationRequestValidator>();
         services.AddScoped<IValidator<CreateAdministratorAccountRequest>, CreateAdministratorAccountRequestValidator>();
-        services.AddScoped<IValidator<CreateExpenseRequest>, CreateExpenseRequestValidator>();
+        services.AddScoped<IValidator<GetExpenseReportsRequest>, GetExpenseReportsRequestValidator>();
         services.AddScoped<IValidator<CreateExpenseReportRequest>, CreateExpenseReportRequestValidator>();
         services.AddScoped<IValidator<GetExpensesRequest>, GetExpensesRequestValidator>();
+        services.AddScoped<IValidator<CreateExpenseRequest>, CreateExpenseRequestValidator>();
         services.AddScoped<IValidator<UpdateExpenseRequest>, UpdateExpenseRequestValidator>();
 
         return services;

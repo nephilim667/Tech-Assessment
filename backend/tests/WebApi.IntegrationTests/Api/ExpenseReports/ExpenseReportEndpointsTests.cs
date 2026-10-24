@@ -328,7 +328,162 @@ namespace WebApi.IntegrationTests.Api.ExpenseReports
             Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         }
 
+        [Fact]
+        public async Task GetReports_Filters_User_And_Period_And_Returns_Multiple_Reports()
+        {
+            var token = TestContext.Current.CancellationToken;
+            var userId = await CreateUserAsync(isActive: true, token);
+            var otherUserId = await CreateUserAsync(isActive: true, token);
 
+            using var client = await factory.CreateSuperAdminClientAsync(token);
+
+            var first = await CreateReportForListAsync(client, userId, 2026, 10, token);
+            var second = await CreateReportForListAsync(client, userId, 2026, 10, token);
+
+            await CreateReportForListAsync(client, userId, 2026, 9, token);
+            await CreateReportForListAsync(client, userId, 2025, 10, token);
+            await CreateReportForListAsync(client, otherUserId, 2026, 10, token);
+
+            using var response = await client.GetAsync(GetReportsUrl(userId, 2026, 10), token);
+
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+            var reports = await response.Content.ReadFromJsonAsync<ExpenseReportResponse[]>(token);
+
+            Assert.NotNull(reports);
+
+            Assert.Equal(new[] { first.Id, second.Id }.OrderBy(id => id).ToArray(), reports.Select(report => report.Id).ToArray());
+
+            Assert.All(reports, report =>
+            {
+                Assert.Equal(userId, report.UserId);
+                Assert.Equal(2026, report.Year);
+                Assert.Equal(10, report.Month);
+            });
+        }
+
+        [Fact]
+        public async Task GetReports_When_Period_Has_No_Report_Returns_Empty_List()
+        {
+            var token = TestContext.Current.CancellationToken;
+            var userId = await CreateUserAsync(isActive: true, token);
+
+            using var client = await factory.CreateSuperAdminClientAsync(token);
+
+            using var response = await client.GetAsync(GetReportsUrl(userId, 2026, 10), token);
+
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+            var reports = await response.Content.ReadFromJsonAsync<ExpenseReportResponse[]>(token);
+
+            Assert.NotNull(reports);
+            Assert.Empty(reports);
+        }
+
+        [Theory]
+        [InlineData(false, HttpStatusCode.OK)]
+        [InlineData(true, HttpStatusCode.NotFound)]
+        public async Task GetReports_Applies_User_Visibility(
+            bool isDeleted,
+            HttpStatusCode expectedStatus)
+        {
+            var token = TestContext.Current.CancellationToken;
+            var userId = await CreateUserAsync(isActive: true, token);
+
+            using var client = await factory.CreateSuperAdminClientAsync(token);
+            var report = await CreateReportForListAsync(client, userId, 2026, 10, token);
+
+            using (var setupScope = factory.Services.CreateScope())
+            {
+                var context = setupScope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+                var user = await context.Beneficiaries.SingleAsync(entity => entity.Id == userId, token);
+
+                user.IsActive = false;
+                user.IsDeleted = isDeleted;
+
+                await context.SaveChangesAsync(token);
+            }
+
+            using var response = await client.GetAsync(GetReportsUrl(userId, 2026, 10), token);
+
+            Assert.Equal(expectedStatus, response.StatusCode);
+
+            if (!isDeleted)
+            {
+                var reports = await response.Content.ReadFromJsonAsync<ExpenseReportResponse[]>(token);
+
+                Assert.NotNull(reports);
+                Assert.Equal(report.Id, Assert.Single(reports).Id);
+            }
+        }
+
+        [Fact]
+        public async Task GetReports_When_User_Does_Not_Exist_Returns_NotFound()
+        {
+            var token = TestContext.Current.CancellationToken;
+            using var client = await factory.CreateSuperAdminClientAsync(token);
+
+            using var response = await client.GetAsync(GetReportsUrl(Guid.NewGuid(), 2026, 10), token);
+
+            Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        }
+
+        [Theory]
+        [InlineData("userId=00000000-0000-0000-0000-000000000000&year=2026&month=10", "UserId")]
+        [InlineData("userId=11111111-1111-1111-1111-111111111111&year=0&month=10", "Year")]
+        [InlineData("userId=11111111-1111-1111-1111-111111111111&year=2026&month=13", "Month")]
+        public async Task GetReports_When_Query_Is_Invalid_Returns_ValidationError(string query, string expectedField)
+        {
+            var token = TestContext.Current.CancellationToken;
+            using var client = await factory.CreateSuperAdminClientAsync(token);
+
+            using var response = await client.GetAsync($"/api/expense-reports?{query}", token);
+
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+            using var problem = JsonDocument.Parse(await response.Content.ReadAsStringAsync(token));
+
+            Assert.True(problem.RootElement.GetProperty("errors").TryGetProperty(expectedField, out _));
+        }
+
+        [Theory]
+        [InlineData("Admin", HttpStatusCode.OK)]
+        [InlineData("SuperAdmin", HttpStatusCode.OK)]
+        [InlineData("", HttpStatusCode.Forbidden)]
+        public async Task GetReports_Applies_Role_Authorization(string role, HttpStatusCode expectedStatus)
+        {
+            var token = TestContext.Current.CancellationToken;
+            var userId = await CreateUserAsync(isActive: true, token);
+
+            using var scope = factory.Services.CreateScope();
+            var issuer = scope.ServiceProvider.GetRequiredService<IAccessTokenIssuer>();
+
+            string[] roles = string.IsNullOrEmpty(role) ? [] : [role];
+            var accessToken = issuer.Generate(Guid.NewGuid(), roles);
+
+            using var client = factory.CreateClient();
+
+            client.DefaultRequestHeaders.Authorization =new AuthenticationHeaderValue("Bearer", accessToken.AccessToken);
+
+            using var response = await client.GetAsync(GetReportsUrl(userId, 2026, 10), token);
+
+            Assert.Equal(expectedStatus, response.StatusCode);
+        }
+
+        [Fact]
+        public async Task GetReports_When_Anonymous_Returns_Unauthorized()
+        {
+            var token = TestContext.Current.CancellationToken;
+            using var client = factory.CreateClient();
+
+            using var response = await client.GetAsync(GetReportsUrl(Guid.NewGuid(), 2026, 10), token);
+
+            Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        }
+
+
+        // Helpers
         private async Task<Guid> CreateUserAsync(bool isActive, CancellationToken cancellationToken)
         {
             var user = User.Create(
@@ -349,6 +504,19 @@ namespace WebApi.IntegrationTests.Api.ExpenseReports
             await context.SaveChangesAsync(cancellationToken);
 
             return user.Id;
+        }
+        
+        private static string GetReportsUrl(Guid userId, int year, int month) => $"/api/expense-reports?userId={userId}&year={year}&month={month}";
+
+        private static async Task<ExpenseReportResponse> CreateReportForListAsync(HttpClient client, Guid userId, int year, int month, CancellationToken token)
+        {
+            using var response = await client.PostAsJsonAsync("/api/expense-reports", new CreateExpenseReportRequest(userId, year, month), token);
+            Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+
+            var report = await response.Content.ReadFromJsonAsync<ExpenseReportResponse>(token);
+            Assert.NotNull(report);
+
+            return report;
         }
     }
 }

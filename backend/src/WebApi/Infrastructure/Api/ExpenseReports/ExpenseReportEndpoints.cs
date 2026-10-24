@@ -24,6 +24,14 @@ namespace WebApi.Infrastructure.Api.ExpenseReports
                    .Produces(StatusCodes.Status401Unauthorized)
                    .Produces(StatusCodes.Status403Forbidden);
 
+            reports.MapGet("", GetExpenseReportsEndpoint.GetAsync)
+                    .AddEndpointFilter<ValidationFilter<GetExpenseReportsRequest>>()
+                    .Produces<IReadOnlyList<ExpenseReportResponse>>()
+                    .ProducesValidationProblem()
+                    .ProducesProblem(StatusCodes.Status404NotFound)
+                    .Produces(StatusCodes.Status401Unauthorized)
+                    .Produces(StatusCodes.Status403Forbidden);
+
             reports.MapPost("", CreateExpenseReportEndpoint.CreateAsync)
                    .AddEndpointFilter<ValidationFilter<CreateExpenseReportRequest>>()
                    .Produces<ExpenseReportResponse>(StatusCodes.Status201Created)

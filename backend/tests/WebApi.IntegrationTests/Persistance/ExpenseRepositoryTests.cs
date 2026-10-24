@@ -1,15 +1,13 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-
-using WebApi.Domain.Models;
-using WebApi.Domain.Contracts.Expenses;
 using WebApi.Application.Interfaces.Common;
+using WebApi.Application.Interfaces.ExpenseReports;
 using WebApi.Application.Interfaces.Expenses;
-
+using WebApi.Domain.Contracts.Expenses;
+using WebApi.Domain.Models;
 using WebApi.Infrastructure.Persistence;
 using WebApi.Infrastructure.Persistence.Entities;
 using WebApi.Infrastructure.Persistence.Mappings;
-
 using WebApi.IntegrationTests.Infrastructure;
 
 namespace WebApi.IntegrationTests.Persistance
