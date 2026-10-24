@@ -20,7 +20,14 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.AddRedisClient(connectionName: "cache");
 
-builder.AddNpgsqlDbContext<AppDbContext>(connectionName: "database",
+builder.AddNpgsqlDbContext<AppDbContext>(
+    connectionName: "database", 
+    configureSettings: settings =>
+    {
+        // Les transactions sont pilotées explicitement par UnitOfWork.
+        // Aucune reprise automatique des opérations SQL n'est activée.
+        settings.DisableRetry = true;
+    },
     configureDbContextOptions: options =>
         options.UseAsyncSeeding(async (context, _, cancellationToken) =>
             await AppDbContext.SeedAsync(context, cancellationToken)));
