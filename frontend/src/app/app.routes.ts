@@ -1,6 +1,7 @@
 import { Routes } from '@angular/router';
 
 import { authenticationGuard } from './core/authentication/guards/authentication-guard';
+import { superAdministratorGuard } from './core/authentication/guards/super-administrator-guard';
 import { guestGuard } from './core/authentication/guards/guest-guard';
 
 export const appRoutes: Routes = [
@@ -31,6 +32,13 @@ export const appRoutes: Routes = [
     loadComponent: () =>
       import('./features/expenses/pages/expenses-page')
         .then((module) => module.ExpensesPage),
+  },
+  {
+    path: 'administrators',
+    canActivate: [superAdministratorGuard],
+    loadComponent: () =>
+      import('./features/administrators/pages/administrators-page')
+        .then((module) => module.AdministratorsPage),
   },
   { path: '', pathMatch: 'full', redirectTo: 'users' },
   { path: '**', redirectTo: 'users' },

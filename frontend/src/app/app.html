@@ -3,6 +3,9 @@
 
   @if (auth.hasSession()) {
     <nav aria-label="Navigation principale">
+      @if (session.isSuperAdmin()) {
+        <a routerLink="/administrators">Administrateurs</a>
+      }
       <a routerLink="/users">Utilisateurs</a>
       <a routerLink="/expense-reports">Notes de frais</a>
 

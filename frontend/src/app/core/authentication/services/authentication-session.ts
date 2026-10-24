@@ -1,5 +1,6 @@
-import { inject, Injectable, signal } from '@angular/core';
+import { inject, Injectable, signal, computed } from '@angular/core';
 
+import { hasJwtRole } from '../helpers/has-jwt-role';
 import { AuthenticationResponse } from '../contracts/authentication-response';
 import { AUTH_SESSION_STORAGE } from '../tokens/auth-session-storage';
 
@@ -10,6 +11,13 @@ export class AuthenticationSession {
 
   private readonly currentSession = signal<AuthenticationResponse | null>(this.restore());
   readonly session = this.currentSession.asReadonly();
+
+  readonly isSuperAdmin = computed(() =>
+    hasJwtRole(
+      this.session()?.accessToken ?? null,
+      'SuperAdmin',
+    ),
+  );
 
   start(response: AuthenticationResponse): void {
     if (!this.isValid(response)) {

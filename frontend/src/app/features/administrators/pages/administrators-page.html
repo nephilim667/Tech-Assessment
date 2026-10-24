@@ -1,0 +1,49 @@
+<h2>Comptes administrateurs</h2>
+
+<section class="card administrator-creation">
+  <h3>Créer un administrateur</h3>
+
+  <p>
+    Ce compte pourra gérer les administrés, leurs notes de frais et leurs dépenses.
+  </p>
+
+  @if (store.error(); as error) {
+    <p class="error" role="alert">{{ error }}</p>
+  }
+
+  @if (store.createdEmail(); as email) {
+    <p role="status">Le compte {{ email }} a été créé.</p>
+  }
+
+  <form [formGroup]="form" (ngSubmit)="submit()">
+    <fieldset [disabled]="store.isSaving()">
+      <div class="field">
+        <label for="administrator-email">Adresse e-mail</label>
+
+        <input id="administrator-email" type="email" autocomplete="off" formControlName="email"/>
+
+        @if (form.controls.email.touched && form.controls.email.invalid) {
+          <small class="error">Saisissez une adresse e-mail valide.</small>
+        }
+      </div>
+
+      <div class="field">
+        <label for="administrator-password">Mot de passe initial</label>
+        <input id="administrator-password" type="password" autocomplete="new-password" formControlName="password" aria-describedby="administrator-password-help" />
+        <small id="administrator-password-help">
+          Au moins 12 caractères, avec une majuscule, une minuscule, un chiffre et un caractère spécial.
+        </small>
+
+        @if (form.controls.password.touched && form.controls.password.invalid) {
+          <small class="error">
+            Le mot de passe ne respecte pas les critères indiqués.
+          </small>
+        }
+      </div>
+
+      <button type="submit" [disabled]="form.invalid || store.isSaving()">
+        {{ store.isSaving() ? 'Création…' : 'Créer le compte' }}
+      </button>
+    </fieldset>
+  </form>
+</section>

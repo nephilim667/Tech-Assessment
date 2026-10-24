@@ -2,6 +2,7 @@ import { Component, effect, inject } from '@angular/core';
 import { Router, RouterLink, RouterOutlet } from '@angular/router';
 
 import { AuthenticationStore } from './core/authentication/store/authentication-store';
+import { AuthenticationSession } from './core/authentication/services/authentication-session';
 
 @Component({
   selector: 'app-root',
@@ -13,6 +14,7 @@ export class App {
   private readonly router = inject(Router);
 
   readonly auth = inject(AuthenticationStore);
+  readonly session = inject(AuthenticationSession);
 
   constructor() {
     let hadSession = false;
