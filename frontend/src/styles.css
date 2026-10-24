@@ -46,11 +46,6 @@ nav, .actions {
   background: white;
 }
 
-.login-card {
-  max-width: 440px;
-  margin: 3rem auto;
-}
-
 fieldset {
   border: 0;
   padding: 0;
@@ -98,3 +93,48 @@ a {
   color: #a51d26;
   margin-bottom: 0.75rem;
 }
+
+h3 {
+  margin: 0 0 1rem;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.section-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.section-heading h3 {
+  margin: 0;
+}
+
+.table-container {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  padding: 0.75rem;
+  border-bottom: 1px solid #d5dae0;
+  text-align: left;
+  vertical-align: top;
+}
+
+th {
+  font-weight: 600;
+}
+
+.button-danger {
+  background: #a51d26;
+  border-color: #a51d26;
+}
+

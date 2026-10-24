@@ -12,6 +12,7 @@ import { AuthenticationStore } from '../../../core/authentication/store/authenti
   selector: 'app-login-page',
   imports: [ReactiveFormsModule],
   templateUrl: './login-page.html',
+  styleUrl: '../login-page.css',
 })
 export class LoginPage {
   private readonly builder = inject(NonNullableFormBuilder);

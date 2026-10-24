@@ -1,0 +1,111 @@
+<h2>Utilisateurs administrés</h2>
+
+@if (store.error(); as error) {
+  <p class="error" role="alert">{{ error }}</p>
+}
+
+<div class="users-layout">
+  <section class="card">
+    <h3>Créer un utilisateur</h3>
+
+    <form [formGroup]="form" (ngSubmit)="submit()">
+      <fieldset [disabled]="store.isSaving() || store.isLoading()">
+        @for (field of fields; track field.name) {
+          <div class="field">
+            <label [for]="field.name">{{ field.label }}</label>
+
+            <input
+              [id]="field.name"
+              type="text"
+              [formControlName]="field.name"
+              [attr.autocomplete]="field.autocomplete"
+              [attr.aria-invalid]="
+                form.controls[field.name].touched &&
+                form.controls[field.name].invalid
+              "
+            />
+
+            @if (form.controls[field.name].touched && form.controls[field.name].invalid) {
+              <small class="error">
+                Le champ {{ field.label.toLowerCase() }} est obligatoire.
+              </small>
+            }
+          </div>
+        }
+
+        <div class="field">
+          <label for="maxExpensesPerMonth">
+            Nombre maximal de dépenses par mois
+          </label>
+
+          <input id="maxExpensesPerMonth" type="number" min="1" step="1" formControlName="maxExpensesPerMonth"/>
+          <small>Toutes notes de frais confondues.</small>
+
+          @if (form.controls.maxExpensesPerMonth.touched && form.controls.maxExpensesPerMonth.invalid) {
+            <small class="error">Saisissez un nombre entier supérieur ou égal à 1.</small>
+          }
+        </div>
+
+        <button type="submit" [disabled]="form.invalid || store.isSaving() || store.isLoading()">
+          Créer l’utilisateur
+        </button>
+      </fieldset>
+    </form>
+  </section>
+
+  <section class="card" [attr.aria-busy]="store.isLoading()">
+    <div class="section-heading">
+      <h3>Liste des utilisateurs</h3>
+
+      <button type="button" [disabled]="store.isLoading() || store.isSaving()" (click)="store.load()">
+        Actualiser
+      </button>
+    </div>
+
+    @if (store.isLoading()) {
+      <p role="status">Chargement des utilisateurs…</p>
+    }
+
+    @if (!store.isLoading() && store.users().length === 0) {
+      <p>Aucun utilisateur à afficher.</p>
+    }
+
+    @if (store.users().length > 0) {
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Utilisateur</th>
+              <th scope="col">Ville</th>
+              <th scope="col">Quota mensuel</th>
+              <th scope="col">Statut</th>
+              <th scope="col">Actions</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            @for (user of store.users(); track user.id) {
+              <tr>
+                <td>{{ user.firstName }} {{ user.lastName }}</td>
+                <td>{{ user.city }}</td>
+                <td>{{ user.maxExpensesPerMonth }}</td>
+                <td>{{ user.isActive ? 'Actif' : 'Inactif' }}</td>
+                <td>
+                  <div class="actions">
+                    <button type="button" [disabled]="store.isSaving() || store.isLoading()" (click)="toggleStatus(user)">
+                      {{ user.isActive ? 'Désactiver' : 'Activer' }}
+                    </button>
+
+                    <button type="button" class="button-danger" [disabled]="store.isSaving() || store.isLoading()" (click)="deleteUser(user)">
+                      Supprimer
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </section>
+</div>
