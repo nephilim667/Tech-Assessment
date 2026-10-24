@@ -1,2 +1,21 @@
-<app-nx-welcome></app-nx-welcome>
-<router-outlet></router-outlet>
+<header class="app-header">
+  <h1>N2JSoft — Notes de frais</h1>
+
+  @if (auth.hasSession()) {
+    <nav aria-label="Navigation principale">
+      <a routerLink="/users">Utilisateurs</a>
+
+      <button type="button" (click)="logout()" [disabled]="auth.isPending()">
+        {{ auth.isPending() ? 'Patientez…' : 'Se déconnecter' }}
+      </button>
+    </nav>
+  }
+</header>
+
+@if (auth.hasSession() && auth.error()) {
+  <p class="container error" role="alert">{{ auth.error() }}</p>
+}
+
+<main class="container">
+  <router-outlet />
+</main>

@@ -1,18 +1,33 @@
 import { TestBed } from '@angular/core/testing';
+import { provideHttpClient } from '@angular/common/http';
+import { provideRouter } from '@angular/router';
+
 import { App } from './app';
-import { NxWelcome } from './nx-welcome';
 
 describe('App', () => {
   beforeEach(async () => {
+    sessionStorage.clear();
+
     await TestBed.configureTestingModule({
-      imports: [App, NxWelcome],
+      imports: [App],
+      providers: [
+        provideHttpClient(),
+        provideRouter([]),
+      ],
     }).compileComponents();
   });
 
-  it('should render title', () => {
+  afterEach(() => {
+    sessionStorage.clear();
+  });
+
+  it('renders the application heading', () => {
     const fixture = TestBed.createComponent(App);
     fixture.detectChanges();
-    const compiled = fixture.nativeElement as HTMLElement;
-    expect(compiled.querySelector('h1')?.textContent).toContain('Welcome to N2F');
+
+    const element = fixture.nativeElement as HTMLElement;
+
+    expect(element.querySelector('h1')?.textContent)
+      .toContain('N2JSoft — Notes de frais');
   });
 });

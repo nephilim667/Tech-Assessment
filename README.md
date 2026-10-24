@@ -99,6 +99,8 @@ La page de visualisation d'une note de frais permet :
 
 ### TEST Account 
 - Email et Password sont généré par aspire au démarrage
+    - email fixe superadmin@n2jsoft.local
+    - mot de passe généré et conservé par Aspire. Un compte existant ne voit pas son mot de passe réinitialisé au démarrage.
 - les valeurs sont a récupéré dans les propriétés de webapi : BootstrapAdmin__Email et BootstrapAdmin__Password
 
 ### Démarche
