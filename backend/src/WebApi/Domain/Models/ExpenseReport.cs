@@ -34,10 +34,11 @@ namespace WebApi.Domain.Models
             if (year is < 1 or > 9999 || month is < 1 or > 12)
                 return Result<ExpenseReport>.Failure(ExpenseReportErrors.InvalidPeriod);
 
+            var culture = CultureInfo.GetCultureInfo("fr-FR");
             var period = new DateOnly(year, month, 1);
-            var formattedPeriod = period.ToString("MMMM yyyy", CultureInfo.GetCultureInfo("fr-FR"));
 
-            var title = $"{user.LastName} {user.FirstName} - {formattedPeriod}";
+            var formattedPeriod = culture.TextInfo.ToTitleCase(period.ToString("MMMM yyyy", culture));
+            var title = $"{user.FirstName} {user.LastName} - {formattedPeriod}";
 
             return Result<ExpenseReport>.Success(
                 new ExpenseReport(Guid.NewGuid(), user.Id, title, year, month));

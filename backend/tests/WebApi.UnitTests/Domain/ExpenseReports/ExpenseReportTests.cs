@@ -22,7 +22,7 @@ namespace WebApi.UnitTests.Domain.ExpenseReports
             Assert.Equal(user.Id, report.UserId);
             Assert.Equal(2026, report.Year);
             Assert.Equal(10, report.Month);
-            Assert.Equal("Leblanc Juste - octobre 2026", report.Title);
+            Assert.Equal("Juste Leblanc - Octobre 2026", report.Title);
         }
 
         [Fact]

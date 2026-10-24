@@ -40,7 +40,7 @@ namespace WebApi.IntegrationTests.Api.ExpenseReports
             Assert.NotNull(report);
             Assert.NotEqual(Guid.Empty, report.Id);
             Assert.Equal(userId, report.UserId);
-            Assert.Equal("Leblanc Juste - octobre 2026", report.Title);
+            Assert.Equal("Juste Leblanc - Octobre 2026", report.Title);
             Assert.Equal(2026, report.Year);
             Assert.Equal(10, report.Month);
 
@@ -618,6 +618,49 @@ namespace WebApi.IntegrationTests.Api.ExpenseReports
             Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         }
 
+        [Fact]
+        public async Task Reports_With_Same_Title_Expose_Distinct_Stable_References()
+        {
+            var token = TestContext.Current.CancellationToken;
+            var userId = await CreateUserAsync(isActive: true, token);
+
+            using var client = await factory.CreateSuperAdminClientAsync(token);
+
+            using var creation = await client.PostAsJsonAsync("/api/expense-reports", new CreateExpenseReportRequest(userId, 2026, 10),token);
+            Assert.Equal(HttpStatusCode.Created, creation.StatusCode);
+
+            using var createdJson = JsonDocument.Parse(await creation.Content.ReadAsStringAsync(token));
+
+            var firstId = createdJson.RootElement.GetProperty("id").GetGuid();
+            var firstReference = createdJson.RootElement.GetProperty("reference").GetString();
+
+            var firstTitle = createdJson.RootElement.GetProperty("title").GetString();
+            Assert.Equal(firstId.ToString("D"), firstReference);
+
+            var second = await CreateReportForListAsync(client, userId, 2026, 10, token);
+
+            Assert.Equal(firstTitle, second.Title);
+            Assert.NotEqual(firstReference, second.Reference);
+
+            using var lookup = await client.GetAsync($"/api/expense-reports/{firstId}", token);
+            Assert.Equal(HttpStatusCode.OK, lookup.StatusCode);
+
+            using var lookupJson = JsonDocument.Parse(await lookup.Content.ReadAsStringAsync(token));
+            Assert.Equal(firstReference, lookupJson.RootElement.GetProperty("reference").GetString());
+
+            using var listing = await client.GetAsync(GetReportsUrl(userId, 2026, 10), token);
+            Assert.Equal(HttpStatusCode.OK, listing.StatusCode);
+
+            using var listingJson = JsonDocument.Parse(await listing.Content.ReadAsStringAsync(token));
+
+            var references = listingJson.RootElement.EnumerateArray()
+                .Select(report => report.GetProperty("reference").GetString())
+                .ToArray();
+
+            Assert.Equal(2, references.Length);
+            Assert.Contains(firstReference, references);
+            Assert.Contains(second.Reference, references);
+        }
 
         // Helpers
         private async Task<Guid> CreateUserAsync(bool isActive, CancellationToken cancellationToken)
